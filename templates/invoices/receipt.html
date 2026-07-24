@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>{{{baseCss}}}</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="company-block">
+    {{#if company.company_logo}}
+      <img src="{{company.company_logo}}" class="logo" />
+    {{/if}}
+
+    <div class="company-info">
+      <h2>{{company.company_name}}</h2>
+      <p>{{company.company_address}}</p>
+      <p>
+        {{#if company.company_state}}State: {{company.company_state}} | {{/if}}
+        {{#if company.company_gst}}GST: {{company.company_gst}}{{/if}}
+      </p>
+      {{#if company.company_phone}}<p>Phone: {{company.company_phone}}</p>{{/if}}
+      {{#if company.company_email}}<p>Email: {{company.company_email}}</p>{{/if}}
+    </div>
+  </div>
+
+  <div class="invoice-meta">
+    <h1>PAYMENT RECEIPT</h1>
+    <p><strong>Receipt No:</strong> {{payment.receipt_number}}</p>
+    <p><strong>Payment Date:</strong> {{formatDate payment.payment_date}}</p>
+    <p><strong>Invoice Ref:</strong> {{invoice.invoice_number}}</p>
+  </div>
+</div>
+
+<hr />
+
+<div class="addresses">
+  <div class="address-box">
+    <h3>Received From</h3>
+    <p><strong>{{billing.name}}</strong></p>
+    {{#if billing.company}}
+      <p>{{billing.company}}</p>
+    {{/if}}
+    <p>{{billing.address}}</p>
+    <p>
+      {{billing.city}},
+      {{billing.state}}
+      {{billing.pincode}}
+    </p>
+    {{#if billing.phone}}<p>Phone: {{billing.phone}}</p>{{/if}}
+  </div>
+</div>
+
+<h3 class="section-title" style="margin-top: 20px;">Payment Details</h3>
+
+<table class="items-table">
+  <thead>
+    <tr>
+      <th>Description</th>
+      <th>Payment Method</th>
+      <th>Reference Number</th>
+      <th>Amount Paid</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Payment towards Invoice #{{invoice.invoice_number}}</td>
+      <td>{{payment.payment_method}}</td>
+      <td>{{#if payment.reference_number}}{{payment.reference_number}}{{else}}N/A{{/if}}</td>
+      <td style="font-weight: bold; font-size: 14px;">{{currency payment.amount}}</td>
+    </tr>
+  </tbody>
+</table>
+
+{{#if payment.notes}}
+  <div class="notes">
+    <h3>Notes / Remarks</h3>
+    <p>{{payment.notes}}</p>
+  </div>
+{{/if}}
+
+<div class="footer">
+  <p>Thank you for your payment!</p>
+  <p>This is a computer generated receipt.</p>
+</div>
+
+</body>
+</html>

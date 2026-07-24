@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <style>
+    {{{baseCss}}}
+  </style>
+</head>
+
+<body>
+
+  <!-- =========================
+     HEADER
+========================= -->
+  <div class="header">
+    <div class="company-block">
+      {{#if company.company_logo}}
+      <img src="{{company.company_logo}}" class="logo" />
+      {{/if}}
+
+      <div class="company-info">
+        <h2>{{company.company_name}}</h2>
+        <p>{{company.company_address}}</p>
+        {{#if company.company_state}}<p>State: {{company.company_state}}</p>{{/if}}
+        {{#if company.company_gst}}<p>GST: {{company.company_gst}}</p>{{/if}}
+        {{#if company.company_phone}}<p>Phone: {{company.company_phone}}</p>{{/if}}
+        {{#if company.company_email}}<p>Email: {{company.company_email}}</p>{{/if}}
+      </div>
+    </div>
+
+    <div class="invoice-meta">
+      <h1>{{invoice.document_title}}</h1>
+      <p><strong>{{invoice.document_number_label}}:</strong> {{invoice.invoice_number}}</p>
+      <p><strong>Issue Date:</strong> {{invoice.issue_date_formatted}}</p>
+      {{#if invoice.due_date_formatted}}
+      <p><strong>Due Date:</strong> {{invoice.due_date_formatted}}</p>
+      {{/if}}
+      <p><strong>Status:</strong> {{invoice.status}}</p>
+    </div>
+  </div>
+
+  <hr />
+
+  <!-- =========================
+     INVOICE CONTENT
+========================= -->
+  <div class="invoice-content">
+    <!-- =========================
+       BILLING + SHIPPING
+  ========================= -->
+    <div class="addresses">
+      <div class="address-box">
+        <h3>Bill To</h3>
+        <p><strong>{{invoice.billing_snapshot.name}}</strong></p>
+        {{#if invoice.billing_snapshot.company}}
+        <p>{{invoice.billing_snapshot.company}}</p>
+        {{/if}}
+        <p>{{invoice.billing_snapshot.address}}</p>
+        <p>
+          {{invoice.billing_snapshot.city}},
+          {{invoice.billing_snapshot.state}}
+          {{invoice.billing_snapshot.pincode}}
+        </p>
+        {{#if invoice.billing_snapshot.gst}}
+        <p>GST: {{invoice.billing_snapshot.gst}}</p>
+        {{/if}}
+      </div>
+
+      <div class="address-box">
+        <h3>Ship To</h3>
+        <p><strong>{{invoice.shipping_snapshot.name}}</strong></p>
+        {{#if invoice.shipping_snapshot.company}}
+        <p>{{invoice.shipping_snapshot.company}}</p>
+        {{/if}}
+        <p>{{invoice.shipping_snapshot.address}}</p>
+        <p>
+          {{invoice.shipping_snapshot.city}},
+          {{invoice.shipping_snapshot.state}}
+          {{invoice.shipping_snapshot.pincode}}
+        </p>
+        {{#if invoice.shipping_snapshot.gst}}
+        <p>GST: {{invoice.shipping_snapshot.gst}}</p>
+        {{/if}}
+      </div>
+    </div>
+
+    <!-- =========================
+     ITEMS TABLE
+========================= -->
+    <h3 class="section-title">{{invoice.document_short_label}} Items</h3>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Description</th>
+          <th>Qty</th>
+          <th>Rate</th>
+          <th>Taxable</th>
+          <th>GST %</th>
+          {{#if (positive invoice.cgst_total)}}
+          <th>CGST</th>
+          {{/if}}
+          {{#if (positive invoice.sgst_total)}}
+          <th>SGST</th>
+          {{/if}}
+          {{#if (positive invoice.igst_total)}}
+          <th>IGST</th>
+          {{/if}}
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each invoice.items}}
+        <tr>
+          <td>{{inc @index}}</td>
+          <td class="description">{{{description}}}</td>
+          <td>{{quantity}}</td>
+          <td>{{currency unit_price}}</td>
+          <td>{{currency taxable_amount}}</td>
+          <td>{{gst_rate}}%</td>
+          {{#if (positive ../invoice.cgst_total)}}
+          <td>{{currency cgst_amount}}</td>
+          {{/if}}
+          {{#if (positive ../invoice.sgst_total)}}
+          <td>{{currency sgst_amount}}</td>
+          {{/if}}
+          {{#if (positive ../invoice.igst_total)}}
+          <td>{{currency igst_amount}}</td>
+          {{/if}}
+          <td>{{currency line_total}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+
+    <!-- =========================
+     TOTALS
+========================= -->
+    <div class="totals">
+      <table>
+        <tr>
+          <td>Taxable Subtotal</td>
+          <td>{{currency invoice.display_taxable_subtotal}}</td>
+        </tr>
+
+        {{#if (positive invoice.discount)}}
+        <tr>
+          <td>Discount{{#if invoice.discount_percent}} ({{invoice.discount_percent}}%){{/if}}</td>
+          <td>-{{currency invoice.discount}}</td>
+        </tr>
+        {{/if}}
+
+        {{#if (positive invoice.cgst_total)}}
+        <tr>
+          <td>Total CGST</td>
+          <td>{{currency invoice.cgst_total}}</td>
+        </tr>
+        {{/if}}
+
+        {{#if (positive invoice.sgst_total)}}
+        <tr>
+          <td>Total SGST</td>
+          <td>{{currency invoice.sgst_total}}</td>
+        </tr>
+        {{/if}}
+
+        {{#if (positive invoice.igst_total)}}
+        <tr>
+          <td>Total IGST</td>
+          <td>{{currency invoice.igst_total}}</td>
+        </tr>
+        {{/if}}
+
+        <tr class="grand-row">
+          <td>Grand Total</td>
+          <td>{{currency invoice.grand_total}}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="clear:both;"></div>
+
+    <!-- =========================
+     NOTES
+========================= -->
+    {{#if invoice.notes}}
+    <div class="notes">
+      <h3>Notes</h3>
+      <p>{{invoice.notes}}</p>
+    </div>
+    {{/if}}
+
+    {{#if invoiceSettings.footer_notes_html}}
+    <div class="rich-section">
+      <h3>Footer Notes</h3>
+      <div class="rich-content">{{{invoiceSettings.footer_notes_html}}}</div>
+    </div>
+    {{/if}}
+
+    <!-- =========================
+       FOOTER
+  ========================= -->
+    <div class="footer">
+      <p>This is a computer generated invoice.</p>
+    </div>
+  </div>
+
+  {{#if (hasContent invoiceSettings.terms_conditions_html)}}
+  <div class="tnc-page">
+    <div class="rich-section">
+      <h3>Terms &amp; Conditions</h3>
+      <div class="rich-content">{{{invoiceSettings.terms_conditions_html}}}</div>
+    </div>
+  </div>
+  {{/if}}
+
+</body>
+
+</html>

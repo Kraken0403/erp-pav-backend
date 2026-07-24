@@ -1,0 +1,115 @@
+body {
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    color: #222;
+    line-height: 1.5;
+  }
+  
+  .header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  .logo {
+    max-height: 70px;
+    object-fit: contain;
+  }
+
+  /* Give logo some breathing room when other header text exists */
+  .header .logo {
+    margin-right: 12px;
+    display: inline-block;
+  }
+  
+  .title {
+    text-align: center;
+    text-transform: uppercase;
+    color: rgba(236, 109, 63, 0.85);
+    margin-bottom: 5px;
+  }
+  
+  .subtitle {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 20px;
+  }
+  
+  hr {
+    border: none;
+    height: 1px;
+    background-color: #ccc;
+    margin: 25px 0;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+  }
+  
+  th,
+  td {
+    border: 1px solid #ccc;
+    padding: 6px 8px;
+    vertical-align: top;
+  }
+  
+  th {
+    background: #f5f5f5;
+    font-weight: bold;
+  }
+  
+  .summary {
+    width: 40%;
+    float: right;
+    margin-top: 15px;
+  }
+  
+  .summary th {
+    text-align: left;
+  }
+  
+  .summary .right {
+    text-align: right;
+  }
+
+  .summary .grand-row {
+    background: #f4f4f4;
+  }
+  
+  .rich p {
+    margin: 4px 0;
+  }
+  
+  .footer {
+    margin-top: 40px;
+    font-size: 10px;
+    text-align: center;
+    color: #666;
+  }
+  
+  /* =========================
+     PRINT RULES
+  ========================= */
+  
+  @page {
+    size: A4;
+    margin: 20mm 15mm 25mm 15mm;
+  
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 10px;
+      color: #666;
+    }
+  }
+  
+  @media print {
+    tr {
+      page-break-inside: avoid;
+    }
+  
+    thead {
+      display: table-header-group;
+    }
+  }
+  

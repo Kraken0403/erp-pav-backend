@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #333;
+      padding: 8px;
+      width: 76mm;
+      max-width: 76mm;
+    }
+
+    .kot-header {
+      text-align: center;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #000;
+      padding-bottom: 6px;
+    }
+
+    .kot-header h1 {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    .kot-number {
+      font-size: 12px;
+      font-weight: bold;
+      margin: 6px 0;
+    }
+
+    .info-section {
+      margin: 8px 0;
+    }
+
+    .info-row {
+      margin: 5px 0;
+    }
+
+    .info-label {
+      font-weight: bold;
+      display: inline-block;
+      width: 84px;
+    }
+
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+    }
+
+    .items-table th {
+      background-color: #f0f0f0;
+      border: 1px solid #000;
+      padding: 6px 4px;
+      font-weight: bold;
+      text-align: left;
+      font-size: 10px;
+    }
+
+    .items-table td {
+      border: 1px solid #ddd;
+      padding: 6px 4px;
+      font-size: 10px;
+    }
+
+    .items-table .qty-col {
+      text-align: right;
+      font-weight: bold;
+      font-size: 11px;
+    }
+
+    .items-table .product-desc {
+      font-size: 10px;
+      color: #666;
+      margin-top: 3px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 5px 15px;
+      border-radius: 3px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .status-pending {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+
+    .status-preparing {
+      background-color: #cfe2ff;
+      color: #084298;
+    }
+
+    .status-ready {
+      background-color: #d1e7dd;
+      color: #0f5132;
+    }
+
+    .status-completed {
+      background-color: #e2e3e5;
+      color: #41464b;
+    }
+
+    .notes-box {
+      background-color: #fff3cd;
+      border: 1px solid #ffe8a1;
+      padding: 8px;
+      margin: 8px 0;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      color: #856404;
+    }
+
+    .footer {
+      margin-top: 10px;
+      text-align: center;
+      font-size: 9px;
+      color: #666;
+      border-top: 1px solid #ddd;
+      padding-top: 6px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .footer p {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .priority-high {
+      background-color: #f8d7da !important;
+      color: #721c24 !important;
+      font-weight: bold !important;
+    }
+
+    @media print {
+      body {
+        padding: 4px;
+        width: 76mm;
+        max-width: 76mm;
+      }
+
+      .no-print {
+        display: none;
+      }
+
+      @page {
+        size: 80mm auto;
+        margin: 2mm;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- HEADER -->
+  <div class="kot-header">
+    {{#if settings.logo_url}}
+    <img src="{{settings.logo_url}}" style="max-height: 32px; margin-bottom: 6px; max-width: 64mm;" />
+    {{/if}}
+    <h1>KITCHEN ORDER TICKET</h1>
+    <div class="kot-number">{{kot.work_order_number}}</div>
+  </div>
+
+  <!-- KOT INFO -->
+  <div class="info-section">
+    <div class="info-row">
+      <span class="info-label">Status:</span>
+      <span class="status-badge status-{{kot.status}}">{{prettyStatus kot.status}}</span>
+    </div>
+
+    <div class="info-row">
+      <span class="info-label">Generated:</span>
+      {{formatDateTime kot.generated_at}}
+    </div>
+
+    <div class="info-row">
+      <span class="info-label">Scheduled For:</span>
+      {{formatDateTime kot.scheduled_for}}
+    </div>
+  </div>
+
+  {{#if showEventDetails}}
+  <!-- EVENT DETAILS -->
+  <div class="info-section">
+    <h3 style="margin-bottom: 6px; border-bottom: 1px solid #ddd; padding-bottom: 4px; font-size: 11px;">Event Details
+    </h3>
+
+    {{#if kot.event_snapshot.name}}
+    <div class="info-row">
+      <span class="info-label">Event Name:</span>
+      {{kot.event_snapshot.name}}
+    </div>
+    {{/if}}
+
+    {{#if kot.event_snapshot.venue}}
+    <div class="info-row">
+      <span class="info-label">Venue:</span>
+      {{kot.event_snapshot.venue}}
+    </div>
+    {{/if}}
+
+    {{#if kot.event_snapshot.pax}}
+    <div class="info-row">
+      <span class="info-label">PAX:</span>
+      <strong style="font-size: 12px;">{{kot.event_snapshot.pax}}</strong>
+    </div>
+    {{/if}}
+
+    {{#if kot.event_snapshot.formatted_date}}
+    <div class="info-row">
+      <span class="info-label">Event Date:</span>
+      {{kot.event_snapshot.formatted_date}}{{#if kot.event_snapshot.formatted_time}} •
+      {{kot.event_snapshot.formatted_time}}{{/if}}
+    </div>
+    {{/if}}
+  </div>
+  {{/if}}
+
+  <!-- CUSTOMER INFO -->
+  <div class="info-section">
+    <h3 style="margin-bottom: 6px; border-bottom: 1px solid #ddd; padding-bottom: 4px; font-size: 11px;">Customer</h3>
+
+    <div class="info-row">
+      <span class="info-label">Name:</span>
+      {{kot.customer_name}}
+    </div>
+  </div>
+
+  {{#if kot.work_order_notes}}
+  <div class="info-section">
+    <div class="notes-box">
+      <strong>Notes:</strong>
+      <div style="margin-top:6px;">{{kot.work_order_notes}}</div>
+    </div>
+  </div>
+  {{/if}}
+
+  <!-- ITEMS TABLE -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 28px;">#</th>
+        <th>Item</th>
+        <th style="width: 52px; text-align: right;">Qty</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each kot.items}}
+      <tr>
+        <td>{{inc @index}}</td>
+        <td>
+          <strong>{{this.product_name}}</strong>
+          {{#if this.product_description}}
+          <div class="product-desc">{{{this.product_description}}}</div>
+          {{/if}}
+        </td>
+        <td class="qty-col">{{this.quantity}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <p>This is a computer-generated KOT</p>
+    <p>Printed on {{today}}</p>
+  </div>
+</body>
+
+</html>

@@ -1,0 +1,708 @@
+/* =============================================
+   ZOANS CRM  –  QUOTATION BASE STYLES
+   Theme: primary #2c3e50 · accent #e67e22 · blue #0d68c5
+   ============================================= */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px;
+  color: #253a43;
+  line-height: 1.6;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ----- LETTERHEAD --------- */
+.letterhead-bar {
+  background: #2c3e50;
+  height: 5px;
+}
+
+.letterhead {
+  border: 1px solid #dce1e6;
+  border-top: none;
+  padding: 16px 22px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 26px;
+}
+
+.letterhead-left {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.logo {
+  max-height: 56px;
+  max-width: 160px;
+  object-fit: contain;
+}
+
+.letterhead-left .logo {
+  margin-right: 6px;
+}
+
+.letterhead-company-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #2c3e50;
+  letter-spacing: -0.01em;
+}
+
+.letterhead-right {
+  text-align: right;
+  font-size: 10.5px;
+  color: #516873;
+  line-height: 1.65;
+}
+
+.letterhead-right p {
+  margin: 0;
+}
+
+.gst-badge {
+  display: inline-block;
+  background: #fef3e2;
+  color: #b5651d;
+  border: 1px solid #f5d5a0;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 9.5px;
+  font-weight: 600;
+  margin-top: 3px;
+}
+
+/* ----- DOCUMENT HEADER ---- */
+.doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.doc-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #2c3e50;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.doc-meta {
+  text-align: right;
+}
+
+.doc-meta table {
+  border-collapse: collapse;
+  margin-left: auto;
+}
+
+.doc-meta td {
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.doc-meta td:first-child {
+  color: #6b7b8d;
+  padding-right: 12px;
+  text-align: right;
+}
+
+.doc-meta td:last-child {
+  font-weight: 600;
+  color: #253a43;
+}
+
+/* ----- CLIENT SECTION ----- */
+.client-section {
+  background: #f7f8fa;
+  border: 1px solid #dce1e6;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.client-section h3 {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8a98a5;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+.client-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #253a43;
+  margin-bottom: 3px;
+}
+
+.client-details p {
+  margin: 1px 0;
+  font-size: 11px;
+  color: #516873;
+}
+
+/* ----- SECTION / CATEGORY TITLES ---- */
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #2c3e50;
+  margin: 20px 0 10px 0;
+  padding-bottom: 4px;
+  border-bottom: 2px solid #e67e22;
+  display: inline-block;
+}
+
+.category-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2c3e50;
+  background: #f7f8fa;
+  border-left: 3px solid #e67e22;
+  padding: 6px 12px;
+  margin: 14px 0 6px 0;
+  border-radius: 0 4px 4px 0;
+}
+
+/* Let long category item tables start immediately and split naturally across pages. */
+.category-section {
+  page-break-inside: auto;
+  break-inside: auto;
+  -webkit-column-break-inside: auto;
+}
+
+/* ----- ITEMS TABLE -------- */
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+  /* Let browsers compute column widths so Brand/Item/Qty columns don't collapse when content wraps */
+  table-layout: auto;
+  font-size: 11px;
+}
+
+.items-table thead th {
+  background: #2c3e50;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 6px;
+  text-align: center;
+  vertical-align: middle;
+  border: none;
+  /* allow wrapping so header labels remain visible rather than truncated */
+  white-space: normal;
+  height: 32px;
+}
+
+.items-table thead th:first-child {
+  border-radius: 4px 0 0 0;
+}
+
+.items-table thead th:last-child {
+  border-radius: 0 4px 0 0;
+}
+
+.items-table tbody td {
+  padding: 8px 6px;
+  text-align: center;
+  vertical-align: top;
+  border-bottom: 1px solid #e8ecf0;
+  word-wrap: break-word;
+}
+
+/* Allow item and brand cells to wrap and use available space */
+.items-table td.item-cell,
+.items-table td.brand-cell {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.items-table tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+
+.items-table td.item-cell,
+.items-table td.brand-cell {
+  text-align: left;
+}
+
+/* Image cell (modern) */
+.items-table .image-cell {
+  width: 68px;
+  text-align: center;
+  vertical-align: middle;
+  padding: 4px;
+}
+
+.item-image {
+  display: block;
+  width: 50px;
+  height: 50px;
+  margin: 0 auto;
+  border: 1px solid #dce1e6;
+  border-radius: 4px;
+  object-fit: cover;
+  background: #fff;
+}
+
+.no-image {
+  display: inline-block;
+  width: 50px;
+  height: 50px;
+  line-height: 50px;
+  text-align: center;
+  border: 1px dashed #c5cdd5;
+  border-radius: 4px;
+  color: #8a98a5;
+  font-size: 8px;
+}
+
+/* Combined Item Cell (title + description) */
+.item-title {
+  font-weight: 600;
+  font-size: 11px;
+  color: #253a43;
+}
+
+.item-sku {
+  color: #8a98a5;
+  font-size: 9.5px;
+}
+
+.item-desc {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed #dce1e6;
+}
+
+.item-desc-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a98a5;
+  margin-bottom: 1px;
+}
+
+.item-desc-body {
+  font-size: 10px;
+  color: #516873;
+  line-height: 1.5;
+  font-weight: 400;
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.item-desc-body p {
+  margin: 0 0 2px 0;
+}
+
+.item-desc-body ul,
+.item-desc-body ol {
+  margin: 0 0 2px 0;
+  padding-left: 14px;
+}
+
+.item-desc-body p:last-child,
+.item-desc-body ul:last-child,
+.item-desc-body ol:last-child {
+  margin-bottom: 0;
+}
+
+.item-desc-body strong {
+  font-weight: 600;
+}
+
+.item-desc-body em {
+  font-style: italic;
+}
+
+.item-desc-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 3px;
+}
+
+/* ----- TOTALS ------------- */
+.totals-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.totals {
+  width: 240px;
+}
+
+.totals table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.totals td {
+  padding: 5px 10px;
+  font-size: 11px;
+  border-bottom: 1px solid #e8ecf0;
+}
+
+.totals td:first-child {
+  color: #6b7b8d;
+}
+
+.totals td:last-child {
+  text-align: right;
+  font-weight: 600;
+  color: #253a43;
+}
+
+.grand-row td {
+  background: #2c3e50 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 12px;
+  border-bottom: none;
+  padding: 8px 10px;
+}
+
+.grand-row td:first-child {
+  border-radius: 0 0 0 4px;
+}
+
+.grand-row td:last-child {
+  border-radius: 0 0 4px 0;
+}
+
+/* ----- NOTES / TERMS ------ */
+.notes-section {
+  margin-top: 22px;
+}
+
+.notes-section h3 {
+  font-size: 11px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.notes-section p {
+  margin: 2px 0;
+  font-size: 11px;
+  color: #516873;
+}
+
+.rich-content {
+  font-size: 11px;
+  color: #516873;
+  line-height: 1.55;
+}
+
+/* =============================================
+   TEMPLATE-SPECIFIC STRUCTURAL TWEAKS ONLY
+   (Colors are uniform — only shapes/spacing differ)
+   ============================================= */
+
+/* --- MINIMAL: softer borders, no rounded corners --- */
+.template-minimal .letterhead-bar {
+  height: 3px;
+}
+
+.template-minimal .letterhead {
+  border-color: #edf0f3;
+}
+
+.template-minimal .client-section {
+  background: transparent;
+  border-color: #edf0f3;
+}
+
+.template-minimal .category-title {
+  background: transparent;
+}
+
+.template-minimal .items-table thead th {
+  background: #f7f8fa;
+  color: #2c3e50;
+  border-bottom: 2px solid #2c3e50;
+  border-radius: 0 !important;
+}
+
+.template-minimal .items-table tbody td {
+  border-bottom-color: #edf0f3;
+}
+
+.template-minimal .items-table tbody tr:nth-child(even) {
+  background: transparent;
+}
+
+.template-minimal .totals td {
+  border-bottom-color: #edf0f3;
+}
+
+.template-minimal .grand-row td {
+  border-radius: 0 !important;
+}
+
+/* --- CLASSIC: square corners, thicker bar --- */
+.template-classic .letterhead-bar {
+  height: 7px;
+  border-radius: 0;
+}
+
+.template-classic .letterhead {
+  border-radius: 0;
+}
+
+.template-classic .client-section {
+  border-radius: 0;
+}
+
+.template-classic .items-table thead th {
+  border-radius: 0 !important;
+}
+
+.template-classic .grand-row td {
+  border-radius: 0 !important;
+}
+
+.template-classic .category-title {
+  border-radius: 0;
+}
+
+/* --- MODERN: no extra color overrides, just keeps default rounded --- */
+
+/* =============================================
+   PRINT + PAGINATION
+   ============================================= */
+
+/* VISUAL PAGE-BREAK MARKER (visible in browser, hidden when printing) */
+.page-break-line {
+  border-top: 1px dotted #909090;
+  margin: 12px 0 16px;
+  height: 0;
+  display: block;
+}
+
+/* Forces quotation content to start on a new page when cover letter exists */
+.start-on-new-page {
+  page-break-before: always;
+  break-before: page;
+  /* modern syntax for Chromium/Puppeteer */
+}
+
+@media print {
+  .page-break-line {
+    display: none;
+  }
+}
+
+/* PAGE BREAKS */
+
+/* Page 1 → Page 2: use page-break-BEFORE on the quotation page,
+   NOT page-break-after on the cover letter page.
+   Using both causes Puppeteer to insert a blank page between them. */
+.cover-letter-page {
+  padding-bottom: 40px;
+}
+
+.quotation-content {
+  /* page-break-before applied via .start-on-new-page when cover letter exists */
+}
+
+/* Page 2 → Page 3 */
+.tnc-page {
+  page-break-before: always;
+  padding-bottom: 40px;
+}
+
+/* Prevent "QUOTATION ITEMS" heading from being orphaned at the bottom
+   of a page without its table content following it */
+.section-title {
+  page-break-after: avoid;
+}
+
+.category-title {
+  page-break-after: avoid;
+}
+
+/* Hide notes-section when its <p> content is empty/whitespace.
+   CSS :has() is supported in Chromium (Puppeteer's engine).
+   Also hides via the JS in each template as a belt-and-suspenders fallback. */
+.notes-section p:empty {
+  display: none;
+}
+
+.notes-section:has(> p:empty):not(:has(> .rich-content)) {
+  display: none;
+}
+
+.rich-section {
+  margin-top: 20px;
+}
+
+.rich-section h3 {
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.rich-content p {
+  margin: 4px 0;
+}
+
+.rich-content ul,
+.rich-content ol {
+  margin: 6px 0 6px 20px;
+  padding: 0;
+}
+
+@page {
+  size: A4;
+}
+
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .items-table,
+  .totals table {
+    page-break-inside: auto;
+  }
+
+  tr,
+  .client-section,
+  .notes-section {
+    page-break-inside: avoid;
+  }
+
+  .category-section {
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  .totals-wrapper {
+    page-break-inside: avoid;
+  }
+}
+
+/* --- Pav ERP quotation PDF refinements --- */
+.cover-letter-page {
+  page-break-after: always;
+  break-after: page;
+}
+
+.cover-letter-page .letterhead-bar,
+.cover-letter-page .letterhead-company-name,
+.cover-letter-page .letterhead-right {
+  display: none !important;
+}
+
+.cover-letter-page .letterhead {
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 0 28px !important;
+  justify-content: center !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.cover-letter-page .letterhead-left {
+  width: 100%;
+  justify-content: center;
+  gap: 0;
+}
+
+.cover-letter-page .letterhead-left .logo {
+  margin: 0 auto;
+}
+
+.quotation-content > .letterhead-bar,
+.quotation-content > .letterhead {
+  display: none !important;
+}
+
+.section-title + .category-section,
+.section-title + .category-section .category-title {
+  margin-top: 6px;
+}
+
+.pdf-page-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.pdf-page-table > thead {
+  display: table-header-group;
+}
+
+.pdf-page-table > tbody {
+  display: table-row-group;
+}
+
+.pdf-page-table > thead > tr > td,
+.pdf-page-table > tbody > tr > td {
+  padding: 0;
+  border: 0;
+}
+
+.pdf-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 0 8px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #e6eef1;
+  color: #516873;
+}
+
+.pdf-page-header-logo {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+}
+
+.pdf-page-header-logo img {
+  display: block;
+  max-height: 34px;
+  max-width: 160px;
+  object-fit: contain;
+}
+
+.pdf-page-header-address {
+  text-align: right;
+  font-size: 9px;
+  line-height: 1.35;
+  color: #6b7b8d;
+}
+
+.pdf-page-header-address p {
+  margin: 0;
+}

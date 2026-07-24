@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>{{{baseCss}}}</style>
+</head>
+<body>
+
+<!-- =========================
+     HEADER
+========================= -->
+<div class="header">
+  {{#if settings.logo_url}}
+    <img src="{{settings.logo_url}}" class="logo" />
+  {{/if}}
+</div>
+
+<h2 class="title">Work Order</h2>
+<h4 class="subtitle">{{workOrder.work_order_number}}</h4>
+
+<!-- =========================
+     CLIENT INFO
+========================= -->
+<p>
+  <strong>{{workOrder.first_name}} {{workOrder.last_name}}</strong><br />
+  {{#if workOrder.company_name}}{{workOrder.company_name}}<br />{{/if}}
+  {{#if workOrder.email}}Email: {{workOrder.email}}<br />{{/if}}
+  {{#if workOrder.phone_number}}Phone: {{workOrder.phone_number}}<br />{{/if}}
+  {{#if workOrder.gst_number}}GST: {{workOrder.gst_number}}<br />{{/if}}
+</p>
+
+<p>
+  <strong>Quotation:</strong> {{workOrder.quotation_number}}<br />
+  <strong>Issue Date:</strong> {{workOrder.issue_date_formatted}}<br />
+  {{#if workOrder.site_name}}
+    <strong>Site:</strong> {{workOrder.site_name}}
+  {{/if}}
+</p>
+
+<!-- =========================
+     EVENT DETAILS (CATERING ONLY)
+========================= -->
+{{#if isCatering}}
+  <hr />
+  <h3>Event Details</h3>
+
+  <p>
+    {{#if workOrder.event_name}}
+      <strong>Event:</strong> {{workOrder.event_name}}<br />
+    {{/if}}
+
+    {{#if workOrder.event_start_date_formatted}}
+      <strong>Date:</strong> {{workOrder.event_start_date_formatted}}<br />
+    {{else if workOrder.event_date_formatted}}
+      <strong>Date:</strong> {{workOrder.event_date_formatted}}<br />
+    {{/if}}
+
+    {{#if workOrder.event_time_formatted}}
+      <strong>Time:</strong> {{workOrder.event_time_formatted}}<br />
+    {{/if}}
+
+    {{#if workOrder.event_location}}
+      <strong>Location:</strong> {{workOrder.event_location}}
+    {{/if}}
+  </p>
+{{/if}}
+
+<!-- =========================
+     ITEMS TABLE
+========================= -->
+<h3>Work Order Items</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Item</th>
+      <th>Brand</th>
+      <th>Qty</th>
+
+      {{#unless isCatering}}
+        <th>Rate</th>
+        <th>Total</th>
+      {{/unless}}
+    </tr>
+  </thead>
+
+  <tbody>
+    {{#each workOrder.items}}
+      <tr>
+        <td>{{inc @index}}</td>
+        <td>{{product_name}}</td>
+        <td>{{brand}}</td>
+        <td>{{quantity}}</td>
+
+        {{#unless ../isCatering}}
+          <td>{{currency unit_price}}</td>
+          <td>{{currency line_total}}</td>
+        {{/unless}}
+      </tr>
+    {{/each}}
+  </tbody>
+</table>
+
+<!-- =========================
+     GRAND TOTAL (HIDE FOR CATERING)
+========================= -->
+{{#unless isCatering}}
+  <table class="summary">
+    <tr>
+      <th>Subtotal</th>
+      <th class="right">{{currency workOrder.display_subtotal}}</th>
+    </tr>
+    {{#if workOrder.discount}}
+    <tr>
+      <th>Discount{{#if workOrder.discount_percent}} ({{workOrder.discount_percent}}%){{/if}}</th>
+      <th class="right">-{{currency workOrder.discount}}</th>
+    </tr>
+    {{/if}}
+    <tr class="grand-row">
+      <th>Grand Total</th>
+      <th class="right">{{currency workOrder.grand_total}}</th>
+    </tr>
+  </table>
+{{/unless}}
+
+<!-- =========================
+     NOTES
+========================= -->
+{{#if workOrder.notes}}
+  <h3>Notes</h3>
+  <p>{{workOrder.notes}}</p>
+{{/if}}
+
+<!-- =========================
+     TERMS
+========================= -->
+{{#if settings.terms_conditions_html}}
+  <hr />
+  <h3>Terms & Conditions</h3>
+  <div class="rich">
+    {{{settings.terms_conditions_html}}}
+  </div>
+{{/if}}
+
+<!-- =========================
+     FOOTER
+========================= -->
+<p class="footer">
+  Generated on {{today}}
+</p>
+
+</body>
+</html>

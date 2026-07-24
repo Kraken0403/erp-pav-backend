@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <style id="base-css"></style>
+</head>
+
+<body class="template-classic">
+
+    <!-- ==========================================
+         PAGE 1: LETTERHEAD + COVER LETTER
+         (only rendered if cover letter exists)
+         ========================================== -->
+    {{#if settings.cover_letter_html}}
+    <div class="cover-letter-page">
+        <div class="letterhead-bar"></div>
+        <div class="letterhead">
+            <div class="letterhead-left">
+                {{#if settings.logo_url}}
+                <img src="{{settings.logo_url}}" class="logo" />
+                {{else if company.company_logo}}
+                <img src="{{company.company_logo}}" class="logo" />
+                {{/if}}
+                <h1 class="letterhead-company-name">{{company.company_name}}</h1>
+            </div>
+            <div class="letterhead-right">
+                {{#if company.company_address_line1}}<p>{{company.company_address_line1}}</p>{{/if}}
+                {{#if company.company_address_line2}}<p>{{company.company_address_line2}}</p>{{/if}}
+                <p>{{company.company_city}}{{#if company.company_state}}, {{company.company_state}}{{/if}}{{#if
+                    company.company_pincode}} - {{company.company_pincode}}{{/if}}</p>
+                {{#if company.company_phone}}<p>Ph: {{company.company_phone}}</p>{{/if}}
+                {{#if company.company_email}}<p>{{company.company_email}}</p>{{/if}}
+                <!-- GSTIN hidden for PDF output per client request -->
+            </div>
+        </div>
+        <div class="rich-section">
+            <div class="rich-content">{{{settings.cover_letter_html}}}</div>
+        </div>
+    </div>
+    {{/if}}
+
+    <!-- ==========================================
+         PAGE 2: LETTERHEAD + QUOTATION CONTENT
+         ========================================== -->
+    <div class="quotation-content">
+    <!-- <div class="quotation-content {{#if settings.cover_letter_html}}start-on-new-page{{/if}}"> -->
+
+        <!-- <div class="letterhead-bar"></div>
+        <div class="letterhead">
+            <div class="letterhead-left">
+                {{#if settings.logo_url}}
+                <img src="{{settings.logo_url}}" class="logo" />
+                {{else if company.company_logo}}
+                <img src="{{company.company_logo}}" class="logo" />
+                {{/if}}
+                <h1 class="letterhead-company-name">{{company.company_name}}</h1>
+            </div>
+            <div class="letterhead-right">
+                {{#if company.company_address_line1}}<p>{{company.company_address_line1}}</p>{{/if}}
+                {{#if company.company_address_line2}}<p>{{company.company_address_line2}}</p>{{/if}}
+                <p>{{company.company_city}}{{#if company.company_state}}, {{company.company_state}}{{/if}}{{#if
+                    company.company_pincode}} - {{company.company_pincode}}{{/if}}</p>
+                {{#if company.company_phone}}<p>Ph: {{company.company_phone}}</p>{{/if}}
+                {{#if company.company_email}}<p>{{company.company_email}}</p>{{/if}}
+                 -->
+            </div>
+        
+
+        <!-- DOCUMENT HEADER -->
+        <div class="doc-header">
+            <h1 class="doc-title">Quotation</h1>
+            <!--  - {{quotation.quotation_number}} — {{quotation.first_name}} {{quotation.last_name}} -->
+            <div class="doc-meta">
+                <table>
+                    <tr>
+                        <td>Quotation No</td>
+                        <td>{{quotation.quotation_number}}</td>
+                    </tr>
+                    <tr>
+                        <td>Date</td>
+                        <td>{{quotation.quotation_date_formatted}}</td>
+                    </tr>
+                    {{#if quotation.valid_until_formatted}}
+                    <tr>
+                        <td>Valid Until</td>
+                        <td>{{quotation.valid_until_formatted}}</td>
+                    </tr>
+                    {{/if}}
+                </table>
+            </div>
+        </div>
+
+        <!-- CLIENT -->
+        <div class="client-section">
+            <h3>Prepared For</h3>
+            <p class="client-name">{{quotation.first_name}} {{quotation.last_name}}</p>
+            <div class="client-details">
+                {{#if quotation.company_name}}<p>{{quotation.company_name}}</p>{{/if}}
+                {{#if quotation.email}}<p>{{quotation.email}}</p>{{/if}}
+                {{#if quotation.phone_number}}<p>{{quotation.phone_number}}</p>{{/if}}
+                <!-- Customer GST hidden for PDF output -->
+            </div>
+        </div>
+
+        <!-- ITEMS -->
+        <h3 class="section-title">Quotation Items</h3>
+
+        {{#each quotation.categoryGroups}}
+        <div class="category-section">
+            <h3 class="category-title">{{category_name}}</h3>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width:30px">#</th>
+                        <th style="width:80px">Brand</th>
+                        <th>Item</th>
+                        <th style="width:40px">Qty</th>
+                        <th style="width:80px">Rate</th>
+                        <th style="width:90px">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each items}}
+                    <tr>
+                        <td>{{inc @index}}</td>
+                        <td class="brand-cell">{{brand}}</td>
+                        <td class="item-cell">
+                            <span class="item-title">{{title}}</span>
+                            {{#if sku}}<br><span class="item-sku">SKU: {{sku}}</span>{{/if}}
+                            {{#if description}}
+                            <div class="item-desc">
+                                <div class="item-desc-label">Description</div>
+                                <div class="item-desc-body">{{{description}}}</div>
+                            </div>
+                            {{/if}}
+                        </td>
+                        <td>{{qty}}</td>
+                        <td>{{currency rate}}{{#if rateLabel}}<br><small
+                                style="color:#6b7b8d">{{rateLabel}}</small>{{/if}}</td>
+                        <td>
+                            {{currency finalTotal}}
+                            {{#if discount}}<br><small style="color:#ef4444">Discount: -{{currency discount}}</small>{{/if}}
+                        </td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+
+            <!-- <div class="totals-wrapper">
+                <div class="totals">
+                    <table>
+                        <tr>
+                            <td>Sub Total</td>
+                            <td>{{currency sub_total}}</td>
+                        </tr>
+                        {{#if discount_total}}<tr>
+                            <td>Discount</td>
+                            <td>- {{currency discount_total}}</td>
+                        </tr>{{/if}}
+                        
+                        <tr class="grand-row">
+                            <td>Category Total</td>
+                            <td>{{currency grand_total}}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div> -->
+        </div>
+        {{/each}}
+
+        <!-- GRAND TOTAL -->
+        <div class="totals-wrapper">
+            <div class="totals">
+                <table>
+                    <tr>
+                        <td>Sub Total</td>
+                        <td>{{currency quotation.subtotal}}</td>
+                    </tr>
+                    {{#if quotation.cumulative_discount}}
+                    <tr>
+                        <td>Total Discount</td>
+                        <td>- {{currency quotation.cumulative_discount}}</td>
+                    </tr>
+                    {{/if}}
+                    <tr class="grand-row">
+                        <td>Grand Total</td>
+                        <td>{{currency quotation.grand_total}}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+
+        <!-- NOTES will be injected by JS if present -->
+
+    </div><!-- /.quotation-content -->
+
+    <!-- ==========================================
+         PAGE 3: TERMS & CONDITIONS
+         (only rendered if T&C exists)
+         ========================================== -->
+    {{#if settings.terms_conditions_html}}
+    <div class="tnc-page">
+        <div class="notes-section">
+            <h3>Terms &amp; Conditions</h3>
+            <div class="rich-content">{{{settings.terms_conditions_html}}}</div>
+        </div>
+    </div>
+    {{/if}}
+
+
+    <!-- ==========================================
+         NOTES INJECTION SCRIPT
+         ========================================== -->
+    <script>
+        (function () {
+            // These variables must be provided by the backend as window-scoped JS variables
+            // e.g. window.quotationNotes, window.footerNotesHtml
+            var notes = window.quotationNotes || '';
+            var footerNotes = window.footerNotesHtml || '';
+            var notesTrimmed = (typeof notes === 'string') ? notes.trim() : '';
+            var footerNotesTrimmed = (typeof footerNotes === 'string') ? footerNotes.trim() : '';
+
+            var container = document.querySelector('.quotation-content');
+            if (container) {
+                if (notesTrimmed) {
+                    var qDiv = document.createElement('div');
+                    qDiv.className = 'notes-section';
+                    qDiv.innerHTML = '<h3>Notes</h3><p>' + notesTrimmed.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>';
+                    container.appendChild(qDiv);
+                }
+                if (footerNotesTrimmed) {
+                    var fDiv = document.createElement('div');
+                    fDiv.className = 'notes-section';
+                    fDiv.innerHTML = '<h3>Notes</h3><div class="rich-content">' + footerNotesTrimmed + '</div>';
+                    container.appendChild(fDiv);
+                }
+            }
+        })();
+    </script>
+
+</body>
+
+</html>

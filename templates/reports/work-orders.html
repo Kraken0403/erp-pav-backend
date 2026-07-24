@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Work Order Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #333;
+      padding: 20px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      border-bottom: 3px solid #6a1b9a;
+      padding-bottom: 15px;
+    }
+
+    .logo {
+      max-width: 150px;
+      max-height: 80px;
+    }
+
+    .report-info {
+      text-align: right;
+    }
+
+    .report-info h1 {
+      color: #6a1b9a;
+      font-size: 28px;
+      margin-bottom: 5px;
+    }
+
+    .report-info p {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .summary-section {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+    }
+
+    .summary-section h2 {
+      color: #6a1b9a;
+      font-size: 18px;
+      margin-bottom: 15px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+    }
+
+    .summary-item {
+      background: white;
+      padding: 15px;
+      border-radius: 5px;
+      border-left: 4px solid #6a1b9a;
+    }
+
+    .summary-item .label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+
+    .summary-item .value {
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    .data-table thead {
+      background: #6a1b9a;
+      color: white;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+      font-size: 13px;
+    }
+
+    .data-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    .text-right {
+      text-align: right;
+    }
+
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 11px;
+      color: #999;
+      border-top: 1px solid #ddd;
+      padding-top: 15px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <div>
+      {{#if logo}}
+      <img src="{{logo}}" alt="Company Logo" class="logo">
+      {{else}}
+      <h2 style="color: #6a1b9a;">ZOANS CRM</h2>
+      {{/if}}
+    </div>
+    <div class="report-info">
+      <h1>Work Order Report</h1>
+      <p>Period: {{summary.startDate}} to {{summary.endDate}}</p>
+      <p>Generated on: {{generatedDate}} at {{generatedTime}}</p>
+    </div>
+  </div>
+
+  <div class="summary-section">
+    <h2>Summary</h2>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div class="label">Total Work Orders</div>
+        <div class="value">{{summary.totalWorkOrders}}</div>
+      </div>
+      <div class="summary-item">
+        <div class="label">Catering Orders</div>
+        <div class="value">{{summary.cateringOrders}}</div>
+      </div>
+      <div class="summary-item">
+        <div class="label">Total Revenue</div>
+        <div class="value">₹{{summary.totalRevenue}}</div>
+      </div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>WO Number</th>
+        <th>Date</th>
+        <th>Customer</th>
+        <th>Mode</th>
+        {{#if showEventDetails}}
+        <th>Event Date</th>
+        {{/if}}
+        <th>Status</th>
+        <th class="text-right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each data}}
+      <tr>
+        <td>{{inc @index}}</td>
+        <td><strong>{{this.work_order_number}}</strong></td>
+        <td>{{this.work_order_date}}</td>
+        <td>{{this.customer_name}}</td>
+        <td>{{this.mode}}</td>
+        {{#if ../showEventDetails}}
+        <td>{{#if this.event_start_date}}{{this.event_start_date}}{{else}}{{this.event_date}}{{/if}}</td>
+        {{/if}}
+        <td>{{this.status}}</td>
+        <td class="text-right"><strong>₹{{this.total_amount}}</strong></td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <p>&copy; 2025 ZOANS CRM. All rights reserved.</p>
+    <p>This is a computer-generated report.</p>
+  </div>
+</body>
+
+</html>

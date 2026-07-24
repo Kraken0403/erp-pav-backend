@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lead Report</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; padding: 20px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 3px solid #ff9800; padding-bottom: 15px; }
+    .logo { max-width: 150px; max-height: 80px; }
+    .report-info { text-align: right; }
+    .report-info h1 { color: #ff9800; font-size: 28px; margin-bottom: 5px; }
+    .report-info p { font-size: 12px; color: #666; }
+    .summary-section { background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+    .summary-section h2 { color: #ff9800; font-size: 18px; margin-bottom: 15px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .summary-item { background: white; padding: 15px; border-radius: 5px; border-left: 4px solid #ff9800; }
+    .summary-item .label { font-size: 12px; color: #666; margin-bottom: 5px; }
+    .summary-item .value { font-size: 18px; font-weight: bold; color: #333; }
+    .data-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    .data-table thead { background: #ff9800; color: white; }
+    .data-table th, .data-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; font-size: 13px; }
+    .data-table tbody tr:nth-child(even) { background: #fafafa; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #ddd; padding-top: 15px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      {{#if logo}}
+        <img src="{{logo}}" alt="Company Logo" class="logo">
+      {{else}}
+        <h2 style="color: #ff9800;">ZOANS CRM</h2>
+      {{/if}}
+    </div>
+    <div class="report-info">
+      <h1>Lead Report</h1>
+      <p>Period: {{summary.startDate}} to {{summary.endDate}}</p>
+      <p>Generated on: {{generatedDate}} at {{generatedTime}}</p>
+    </div>
+  </div>
+
+  <div class="summary-section">
+    <h2>Summary</h2>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div class="label">Total Leads</div>
+        <div class="value">{{summary.totalLeads}}</div>
+      </div>
+      <div class="summary-item">
+        <div class="label">Converted Leads</div>
+        <div class="value">{{summary.convertedLeads}}</div>
+      </div>
+      <div class="summary-item">
+        <div class="label">Conversion Rate</div>
+        <div class="value">{{summary.conversionRate}}</div>
+      </div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Source</th>
+        <th class="text-right">Count</th>
+        <th class="text-right">Converted</th>
+        <th class="text-right">Conv. Rate</th>
+        <th>Assigned Users</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each data}}
+      <tr>
+        <td><strong>{{this.status}}</strong></td>
+        <td>{{this.source}}</td>
+        <td class="text-right">{{this.count}}</td>
+        <td class="text-right">{{this.converted_count}}</td>
+        <td class="text-right">{{this.conversion_rate}}</td>
+        <td>{{this.assigned_users}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <p>&copy; 2025 ZOANS CRM. All rights reserved.</p>
+    <p>This is a computer-generated report.</p>
+  </div>
+</body>
+</html>
