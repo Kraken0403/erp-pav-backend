@@ -93,9 +93,34 @@ function mapWorkOrderStatusToKotStatus(workOrderStatus) {
 /* --------------------------------------------------
    Simple numbering: WO/{year}/{seq}
 -------------------------------------------------- */
-function generateWorkOrderNumber(sequence) {
-  const year = new Date().getFullYear()
-  return `WO/${year}/${String(sequence).padStart(4, '0')}`
+function generateWorkOrderNumber(sequence, settings = {}) {
+  const now = new Date();
+  let format = String(settings.number_format || '{prefix}/{year}/{seq}');
+  if (settings.numbering_mode === 'yearly' && !format.includes('{year}')) format = '{prefix}/{year}/{seq}';
+  if (settings.numbering_mode === 'monthly' && (!format.includes('{year}') || !format.includes('{month}'))) format = '{prefix}/{year}/{month}/{seq}';
+  return format
+    .replaceAll('{prefix}', settings.prefix || 'WO')
+    .replaceAll('{year}', String(now.getFullYear()))
+    .replaceAll('{month}', String(now.getMonth() + 1).padStart(2, '0'))
+    .replaceAll('{seq}', String(sequence).padStart(4, '0'));
+}
+
+async function getWorkOrderSettings(connection) {
+  try {
+    const [[settings]] = await connection.query('SELECT * FROM work_order_settings WHERE id = 1');
+    return settings || {};
+  } catch (error) {
+    if (error.code === 'ER_NO_SUCH_TABLE') return {};
+    throw error;
+  }
+}
+
+async function getNextWorkOrderSequence(connection, settings) {
+  let where = '';
+  if (settings.numbering_mode === 'yearly') where = 'WHERE YEAR(issue_date) = YEAR(CURDATE())';
+  if (settings.numbering_mode === 'monthly') where = 'WHERE YEAR(issue_date) = YEAR(CURDATE()) AND MONTH(issue_date) = MONTH(CURDATE())';
+  const [[row]] = await connection.query(`SELECT MAX(work_order_sequence) AS maxSeq FROM work_orders ${where}`);
+  return Number(row?.maxSeq || 0) + 1;
 }
 
 /* --------------------------------------------------
@@ -154,12 +179,9 @@ async function _createWorkOrderForQuotation(connection, quotationId) {
     throw new Error('Quotation has no items')
 
   /* 4️⃣ Generate sequence */
-  const [seqRows] = await connection.query(
-    `SELECT MAX(work_order_sequence) AS maxSeq FROM work_orders`
-  )
-
-  const nextSeq = (seqRows[0]?.maxSeq || 0) + 1
-  const work_order_number = generateWorkOrderNumber(nextSeq)
+  const workOrderSettings = await getWorkOrderSettings(connection)
+  const nextSeq = await getNextWorkOrderSequence(connection, workOrderSettings)
+  const work_order_number = generateWorkOrderNumber(nextSeq, workOrderSettings)
   const initialWorkOrderStatus = await resolveWorkOrderInitialStatus(connection)
 
   /* 5️⃣ Determine mode + source_type */
@@ -437,6 +459,8 @@ const getWorkOrderById = async (req, res) => {
     const [items] = await db.query(
       `
       SELECT woi.*, p.name AS product_name,
+             p.cost_price AS product_cost_price,
+             p.cost_price_qty AS product_cost_price_qty,
              COALESCE(woi.description, p.description) AS product_description
       FROM work_order_items woi
       LEFT JOIN products p ON woi.product_id = p.id
@@ -524,6 +548,18 @@ const getWorkOrderById = async (req, res) => {
         }, 0)
         wo.taxes = Number(taxSum || 0)
 
+        const itemMargin = mapped.reduce((sum, item) => {
+          const quantity = Math.max(0, Number(item.quantity || 0))
+          const sellingTotal = Math.max(0, quantity * Number(item.unit_price || 0) - Number(item.discount || 0))
+          const costQuantity = Math.max(1, Number(item.product_cost_price_qty || 1))
+          const costTotal = quantity * (Number(item.product_cost_price || 0) / costQuantity)
+          return sum + sellingTotal - costTotal
+        }, 0)
+        const overallDiscount = Math.max(0, Number(wo.quotation_discount_amount || 0))
+        const netRevenue = Math.max(0, mapped.reduce((sum, item) => sum + Math.max(0, Number(item.quantity || 0) * Number(item.unit_price || 0) - Number(item.discount || 0)), 0) - overallDiscount)
+        wo.margin_amount = itemMargin - overallDiscount
+        wo.margin_percent = netRevenue > 0 ? (wo.margin_amount / netRevenue) * 100 : 0
+
         // Discount percent against pre-discount subtotal
         if (Number(wo.display_taxable_subtotal || 0) > 0 && Number(wo._computed_discount || 0) > 0) {
           if (!wo.discount_percent) {
@@ -540,6 +576,31 @@ const getWorkOrderById = async (req, res) => {
 
     } catch (e) {
       console.warn('getWorkOrderById: failed to compute display_taxable_subtotal', e && e.message ? e.message : e)
+    }
+
+    const [[quotation]] = wo.quotation_id
+      ? await db.query(`SELECT id, quotation_number, status FROM quotations WHERE id = ? LIMIT 1`, [wo.quotation_id])
+      : [[]]
+    const [relatedInvoices] = await db.query(
+      `SELECT id, invoice_number, status, source_type
+       FROM invoices
+       WHERE (source_id = ? AND source_type IN ('WORK_ORDER', 'WORK_ORDER_PROFORMA'))
+          OR (? IS NOT NULL AND source_id = ? AND source_type = 'QUOTATION')
+       ORDER BY id DESC`,
+      [id, wo.quotation_id || null, wo.quotation_id || null]
+    )
+    const [relatedProformas] = await db.query(
+      `SELECT id, proforma_number, status, source_type
+       FROM proforma_invoices
+       WHERE (source_id = ? AND source_type LIKE '%WORK_ORDER%')
+          OR (? IS NOT NULL AND source_id = ? AND source_type LIKE '%QUOTATION%')
+       ORDER BY id DESC`,
+      [id, wo.quotation_id || null, wo.quotation_id || null]
+    )
+    wo.related_documents = {
+      quotation: quotation || null,
+      invoices: relatedInvoices,
+      proforma_invoices: relatedProformas,
     }
 
     return res.status(200).json(wo)
@@ -924,12 +985,9 @@ const createManualWorkOrder = async (req, res) => {
     }
 
     /* 1️⃣ Generate sequence */
-    const [seqRows] = await connection.query(
-      `SELECT MAX(work_order_sequence) AS maxSeq FROM work_orders`
-    )
-
-    const nextSeq = (seqRows[0]?.maxSeq || 0) + 1
-    const work_order_number = generateWorkOrderNumber(nextSeq)
+    const workOrderSettings = await getWorkOrderSettings(connection)
+    const nextSeq = await getNextWorkOrderSequence(connection, workOrderSettings)
+    const work_order_number = generateWorkOrderNumber(nextSeq, workOrderSettings)
     const initialWorkOrderStatus = await resolveWorkOrderInitialStatus(connection)
 
     /* 2️⃣ Determine mode */

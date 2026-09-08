@@ -107,44 +107,45 @@
 
     {{#each quotation.categoryGroups}}
     <div class="category-section">
-      <h3 class="category-title">{{category_name}}</h3>
+      {{#if show_category_heading}}<h3 class="category-title">{{category_name}}</h3>{{/if}}
       <table class="items-table">
         <thead>
           <tr>
-            <th style="width:30px">#</th>
-            <th style="width:70px">Brand</th>
-            <th>Item</th>
-            <th style="width:40px">Qty</th>
-            <th style="width:70px">Rate</th>
-            <th style="width:80px">Total</th>
+            {{#if (hasColumn @root.quotation.displayColumns "image")}}<th style="width:54px">Image</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "brand")}}<th>Brand</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "product")}}<th>Product</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "description")}}<th>Description</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "sku")}}<th>SKU</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "quantity")}}<th style="width:46px">Qty</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "unit_price")}}<th>Unit price</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "selling_price_unit")}}<th>Unit</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "discount")}}<th>Discount</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "gst_rate")}}<th>GST %</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "hsn_sac")}}<th>HSN / SAC</th>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "total")}}<th>Total</th>{{/if}}
           </tr>
         </thead>
         <tbody>
           {{#each items}}
           <tr>
-            <td>{{inc @index}}</td>
-            <td class="brand-cell">{{brand}}</td>
-            <td class="item-cell">
-              <span class="item-title">{{title}}</span>
-              {{#if sku}}<br><span class="item-sku">SKU: {{sku}}</span>{{/if}}
-              {{#if description}}
-              <div class="item-desc">
-                <div class="item-desc-label">Description</div>
-                <div class="item-desc-body">{{{description}}}</div>
-              </div>
-              {{/if}}
-            </td>
-            <td>{{qty}}</td>
-            <td>{{currency rate}}{{#if rateLabel}}<br><small style="color:#6b7b8d">{{rateLabel}}</small>{{/if}}</td>
-            <td>
-              {{currency finalTotal}}
-              {{#if discount}}<br><small style="color:#ef4444">Discount: -{{currency discount}}</small>{{/if}}
-            </td>
+            {{#if (hasColumn @root.quotation.displayColumns "image")}}<td>{{#if image_url}}<img src="{{image_url}}" style="width:42px;height:34px;object-fit:contain" />{{/if}}</td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "brand")}}<td class="brand-cell">{{brand}}</td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "product")}}<td class="item-cell"><span class="item-title">{{title}}</span></td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "description")}}<td class="item-cell"><div class="item-desc-body">{{{description}}}</div></td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "sku")}}<td>{{sku}}</td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "quantity")}}<td>{{qty}}</td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "unit_price")}}<td>{{currency rate}}</td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "selling_price_unit")}}<td>{{selling_price_unit}}</td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "discount")}}<td>{{#if discount}}- {{currency discount}}{{else}}—{{/if}}</td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "gst_rate")}}<td>{{gst_rate}}%</td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "hsn_sac")}}<td>{{hsn_sac}}</td>{{/if}}
+            {{#if (hasColumn @root.quotation.displayColumns "total")}}<td>{{currency finalTotal}}</td>{{/if}}
           </tr>
           {{/each}}
         </tbody>
       </table>
 
+      {{#if show_category_heading}}
       <div class="totals-wrapper">
         <div class="totals">
           <table>
@@ -164,6 +165,7 @@
           </table>
         </div>
       </div>
+      {{/if}}
     </div>
     {{/each}}
 

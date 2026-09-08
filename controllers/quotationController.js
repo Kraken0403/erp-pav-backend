@@ -1,11 +1,16 @@
 const db = require('../config/db');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const { getRootQuotationId } = require('../utils/quotationUtils');
 const { sendQuotationEmail } = require('../services/brevoService');
 const { sendWhatsAppTemplateMessage } = require('../services/whatsappNotfinoService');
-const { generatePdf: generateQuotationPdf } = require('../services/quotationPdfService');
+const {
+  generatePdf: generateQuotationPdf,
+  generateHtml: generateQuotationHtml,
+} = require('../services/quotationPdfService');
 const { _createWorkOrderForQuotation } = require('./workOrderController');
 const { ensureKotForWorkOrder } = require('./kotController');
-const { ensureVendorSchema } = require('../utils/pavilionSchema');
+const { ensureVendorSchema, ensureQuotationShareSchema } = require('../utils/pavilionSchema');
 const { getTableColumns, buildInsertStatement, buildUpdateParts } = require('../utils/dbSchema');
 const { upsertCustomerFromLead } = require('../services/customerSyncService');
 const { createNotificationsForUsers, getAdminUserIds, getSystemNotifierUserId } = require('../services/notificationService');
@@ -15,6 +20,140 @@ const {
 } = require('../utils/whatsappTemplatePayloads');
 
 const quotationEmailLocks = new Map();
+
+const invokeJsonController = async (handler, request) => {
+  let statusCode = 200;
+  let payload = null;
+  await handler(request, {
+    status(code) { statusCode = code; return this; },
+    json(data) { payload = data; return data; },
+  });
+  if (statusCode >= 400) throw new Error(payload?.error || 'Document generation failed');
+  return payload;
+};
+
+const createPublicQuotationLink = async (req, res) => {
+  const { id } = req.params;
+  const { accessCode, acceptanceEnabled = false, slug = '' } = req.body || {};
+  try {
+    await ensureQuotationShareSchema(db);
+    const requestedSlug = String(slug || '').trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+    if (requestedSlug && requestedSlug.length < 3) return res.status(400).json({ error: 'Client URL slug must be at least three characters' });
+    let token = requestedSlug || crypto.randomBytes(24).toString('hex');
+    if (requestedSlug) {
+      const [[duplicate]] = await db.query('SELECT id FROM quotations WHERE public_token = ? AND id <> ? LIMIT 1', [token, id]);
+      if (duplicate) return res.status(409).json({ error: 'That client URL is already in use. Choose another slug.' });
+    }
+    const code = String(accessCode || '');
+    if (code && !/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Access code must be six digits' });
+    await db.query('UPDATE quotations SET public_token = ?, public_access_enabled = ?, public_access_code_hash = ?, public_access_code_display = ?, public_acceptance_enabled = ?, public_viewed_at = NULL WHERE id = ?', [token, code ? 1 : 0, code ? await bcrypt.hash(code, 10) : null, code || null, acceptanceEnabled ? 1 : 0, id]);
+    return res.json({ token, publicUrl: `/public/quotations/${token}`, accessCodeRequired: Boolean(code) });
+  } catch (err) { return res.status(500).json({ error: 'Failed to create public quotation link', details: err.message }); }
+};
+
+const getPublicQuotation = async (req, res) => {
+  try {
+    await ensureQuotationShareSchema(db);
+    const [rows] = await db.query('SELECT id, quotation_number, quotation_date, valid_until, total_amount, total_amount AS grand_total, notes, status, company_id, public_access_enabled, public_acceptance_enabled, public_viewed_at, accepted_at FROM quotations WHERE public_token = ? LIMIT 1', [req.params.token]);
+    if (!rows.length) return res.status(404).json({ error: 'Quotation not found' });
+    if (rows[0].public_access_enabled) return res.status(401).json({ accessCodeRequired: true });
+    const [items] = await db.query(`SELECT id, product_name, quantity, selling_price, discount, gst_rate, hsn_sac FROM quotation_items WHERE quotation_id = ? ORDER BY id ASC`, [rows[0].id]);
+    const renderedHtml = await generateQuotationHtml(rows[0].id);
+    await db.query('UPDATE quotations SET public_viewed_at = COALESCE(public_viewed_at, NOW()) WHERE id = ?', [rows[0].id]);
+    return res.json({ ...rows[0], public_viewed_at: rows[0].public_viewed_at || new Date(), items, rendered_html: renderedHtml });
+  } catch (err) { return res.status(500).json({ error: 'Failed to load quotation' }); }
+};
+
+const verifyPublicQuotation = async (req, res) => {
+  try {
+    await ensureQuotationShareSchema(db);
+    const [rows] = await db.query('SELECT id, public_access_code_hash FROM quotations WHERE public_token = ? LIMIT 1', [req.params.token]);
+    if (!rows.length || !rows[0].public_access_code_hash || !(await bcrypt.compare(String(req.body?.accessCode || ''), rows[0].public_access_code_hash))) return res.status(401).json({ error: 'Invalid access code' });
+    const [quotationRows] = await db.query('SELECT id, quotation_number, quotation_date, valid_until, total_amount, total_amount AS grand_total, notes, status, company_id, public_acceptance_enabled, public_viewed_at, accepted_at FROM quotations WHERE id = ? LIMIT 1', [rows[0].id]);
+    const [items] = await db.query(`SELECT id, product_name, quantity, selling_price, discount, gst_rate, hsn_sac FROM quotation_items WHERE quotation_id = ? ORDER BY id ASC`, [rows[0].id]);
+    const renderedHtml = await generateQuotationHtml(rows[0].id);
+    await db.query('UPDATE quotations SET public_viewed_at = COALESCE(public_viewed_at, NOW()) WHERE id = ?', [rows[0].id]);
+    return res.json({ verified: true, quotation: { ...quotationRows[0], public_viewed_at: quotationRows[0].public_viewed_at || new Date(), items, rendered_html: renderedHtml } });
+  } catch (err) { return res.status(500).json({ error: 'Unable to verify access code' }); }
+};
+
+const acceptPublicQuotation = async (req, res) => {
+  try {
+    await ensureQuotationShareSchema(db);
+    const [rows] = await db.query('SELECT id, lead_id, public_acceptance_enabled, public_access_enabled, public_access_code_hash, status FROM quotations WHERE public_token = ? LIMIT 1', [req.params.token]);
+    if (!rows.length || !rows[0].public_acceptance_enabled) return res.status(404).json({ error: 'Quotation acceptance is unavailable' });
+    if (rows[0].public_access_enabled && !(await bcrypt.compare(String(req.body?.accessCode || ''), rows[0].public_access_code_hash || ''))) {
+      return res.status(401).json({ error: 'A valid six-digit access code is required' });
+    }
+    if (rows[0].status !== 'approved') {
+      const connection = await db.getConnection();
+      try {
+        await connection.beginTransaction();
+        const rootId = await getRootQuotationId(connection, rows[0].id);
+        await connection.query(`UPDATE quotations SET status = 'rejected', is_locked = 1 WHERE id = ? OR parent_id = ?`, [rootId, rootId]);
+        await connection.query("UPDATE quotations SET status = 'approved', accepted_at = NOW(), is_locked = 1 WHERE id = ?", [rows[0].id]);
+        await upsertCustomerFromLead(connection, rows[0].lead_id, null);
+        const workOrder = await _createWorkOrderForQuotation(connection, rows[0].id);
+        await connection.commit();
+        let proformaInvoice = null;
+        try {
+          const { createProformaInvoiceFromQuotation } = require('./invoiceController');
+          proformaInvoice = await invokeJsonController(createProformaInvoiceFromQuotation, {
+            params: { quotationId: rows[0].id },
+            body: { notes: 'Automatically generated after client approval.' },
+          });
+        } catch (proformaError) {
+          console.error('Client-approved quotation proforma generation failed:', proformaError.message);
+        }
+        return res.json({ accepted: true, workOrderId: workOrder?.id || null, proformaInvoiceId: proformaInvoice?.id || null });
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    }
+    let proformaInvoice = null;
+    try {
+      const { createProformaInvoiceFromQuotation } = require('./invoiceController');
+      proformaInvoice = await invokeJsonController(createProformaInvoiceFromQuotation, {
+        params: { quotationId: rows[0].id },
+        body: { notes: 'Automatically generated after client approval.' },
+      });
+    } catch (proformaError) {
+      console.error('Approved quotation proforma generation failed:', proformaError.message);
+    }
+    return res.json({ accepted: true, proformaInvoiceId: proformaInvoice?.id || null });
+  } catch (err) { return res.status(500).json({ error: 'Unable to accept quotation' }); }
+};
+
+const requestPublicQuotationClarification = async (req, res) => {
+  const { customerName = '', customerEmail = '', message = '' } = req.body || {};
+  if (!String(message).trim()) return res.status(400).json({ error: 'Please enter your question or clarification.' });
+  try {
+    await ensureQuotationShareSchema(db);
+    const [[quotation]] = await db.query('SELECT id, quotation_number FROM quotations WHERE public_token = ? LIMIT 1', [req.params.token]);
+    if (!quotation) return res.status(404).json({ error: 'Quotation not found' });
+    await db.query(
+      'INSERT INTO quotation_clarifications (quotation_id, customer_name, customer_email, message) VALUES (?, ?, ?, ?)',
+      [quotation.id, String(customerName).trim() || null, String(customerEmail).trim() || null, String(message).trim()]
+    );
+    try {
+      const byUserId = await getSystemNotifierUserId(db);
+      const toUserIds = await getAdminUserIds(db);
+      if (byUserId && toUserIds.length) await createNotificationsForUsers({
+        byUserId, toUserIds, module: 'quotations',
+        action: `Clarification requested - ${quotation.quotation_number || `#${quotation.id}`}`,
+        sourceId: quotation.id, redirectUrl: `/quotations/${quotation.id}`,
+      });
+    } catch (notificationError) {
+      console.warn('Quotation clarification saved but notification failed:', notificationError.message);
+    }
+    return res.status(201).json({ success: true, message: 'Your clarification request has been sent.' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Unable to send clarification request', details: err.message });
+  }
+};
 
 // ---------------------------------------------------------
 // Helper: Generate Quotation Number
@@ -235,7 +374,26 @@ const createQuotation = async (req, res) => {
     event_location = null,
 
     quotation_discount_type = null,
-    quotation_discount_value = 0
+    quotation_discount_value = 0,
+    company_id = null,
+    quotation_template = null,
+    quotation_type = null,
+    cover_letter_html = null,
+    terms_conditions_html = null,
+    company_logo_url = null,
+    payment_terms = null,
+    line_columns = null,
+    group_items_by_top_category = false,
+    issuer_company_name = null,
+    issuer_company_email = null,
+    issuer_company_phone = null,
+    issuer_company_address = null,
+    issuer_company_gst_number = null,
+    public_link_enabled = false,
+    protected_link = false,
+    access_code = '',
+    acceptance_enabled = false,
+    client_slug = ''
   } = req.body;
   const rounding_amount = req.body.rounding_amount || 0
 
@@ -266,6 +424,34 @@ const createQuotation = async (req, res) => {
 
   try {
     connection = await db.getConnection();
+    // Run schema compatibility work before opening the transaction: MySQL DDL
+    // implicitly commits, which would otherwise break the quotation write.
+    await ensureQuotationShareSchema(connection);
+
+    let publicToken = null;
+    let publicAccessCodeHash = null;
+    const requestedSlug = String(client_slug || '').trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+    const publicAccessCode = protected_link ? String(access_code || '') : '';
+    if (public_link_enabled) {
+      if (requestedSlug && requestedSlug.length < 3) {
+        connection.release();
+        return res.status(400).json({ error: 'Client URL slug must be at least three characters' });
+      }
+      if (publicAccessCode && !/^\d{6}$/.test(publicAccessCode)) {
+        connection.release();
+        return res.status(400).json({ error: 'Access code must be six digits' });
+      }
+      publicToken = requestedSlug || crypto.randomBytes(24).toString('hex');
+      if (requestedSlug) {
+        const [[duplicate]] = await connection.query('SELECT id FROM quotations WHERE public_token = ? LIMIT 1', [publicToken]);
+        if (duplicate) {
+          connection.release();
+          return res.status(409).json({ error: 'That client URL is already in use. Choose another slug.' });
+        }
+      }
+      publicAccessCodeHash = publicAccessCode ? await bcrypt.hash(publicAccessCode, 10) : null;
+    }
+
     await connection.beginTransaction();
     await ensureVendorSchema(connection);
 
@@ -382,6 +568,25 @@ const createQuotation = async (req, res) => {
       quotation_discount_value: Number(quotation_discount_value || 0),
       parent_id: insertParentId,
       version: versionToInsert,
+      company_id: company_id || null,
+      quotation_template,
+      quotation_type,
+      cover_letter_html,
+      terms_conditions_html,
+      company_logo_url,
+      payment_terms,
+      quotation_line_columns_json: JSON.stringify(Array.isArray(line_columns) ? line_columns : []),
+      group_items_by_top_category: group_items_by_top_category ? 1 : 0,
+      issuer_company_name,
+      issuer_company_email,
+      issuer_company_phone,
+      issuer_company_address,
+      issuer_company_gst_number,
+      public_token: publicToken,
+      public_access_enabled: publicToken && publicAccessCode ? 1 : 0,
+      public_access_code_hash: publicToken ? publicAccessCodeHash : null,
+      public_access_code_display: publicToken ? (publicAccessCode || null) : null,
+      public_acceptance_enabled: publicToken && acceptance_enabled ? 1 : 0,
     };
 
     if (quotationMode === 'CATERING') {
@@ -589,7 +794,11 @@ const createQuotation = async (req, res) => {
 
     return res.status(201).json({
       id: header.insertId,
+      quotationId: header.insertId,
       quotation_number,
+      publicToken,
+      publicUrl: publicToken ? `/public/quotations/${publicToken}` : '',
+      accessCodeRequired: Boolean(publicToken && publicAccessCode),
       totals: {
         subtotal,
         total_discount,
@@ -957,6 +1166,27 @@ const getQuotationById = async (req, res) => {
     );
 
     quotation.items = items;
+
+    const [workOrders] = await db.query(
+      `SELECT id, work_order_number FROM work_orders WHERE quotation_id = ? ORDER BY id DESC`,
+      [id]
+    );
+    const [invoices] = await db.query(
+      `SELECT i.id, i.invoice_number, i.status, i.source_type
+       FROM invoices i
+       LEFT JOIN work_orders wo ON i.source_type = 'WORK_ORDER' AND i.source_id = wo.id
+       WHERE (i.source_type = 'QUOTATION' AND i.source_id = ?) OR wo.quotation_id = ?
+       ORDER BY i.id DESC`,
+      [id, id]
+    );
+    const [proformaInvoices] = await db.query(
+      `SELECT id, proforma_number, status, source_type
+       FROM proforma_invoices
+       WHERE source_type LIKE '%QUOTATION%' AND source_id = ?
+       ORDER BY id DESC`,
+      [id]
+    );
+    quotation.related_documents = { work_orders: workOrders, invoices, proforma_invoices: proformaInvoices };
 
     return res.json(quotation);
 
@@ -1580,6 +1810,11 @@ module.exports = {
   deleteQuotation,
   updateQuotationStatus,
   updateQuotationItems,
+  createPublicQuotationLink,
+  getPublicQuotation,
+  verifyPublicQuotation,
+  acceptPublicQuotation,
+  requestPublicQuotationClarification,
   sendQuotationEmailById,
   sendQuotationWhatsAppById
 };

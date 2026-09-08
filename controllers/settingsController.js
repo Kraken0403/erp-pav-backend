@@ -2,11 +2,13 @@ const db = require("../config/db");
 const path = require("path");
 const fs = require("fs");
 const { isEmailEnabled, isWhatsAppEnabled } = require('../config/featureFlags');
+const { ensureColumn } = require('../utils/pavilionSchema');
 
 /* --------------------------------------------------
    ENSURE SETTINGS ROW EXISTS (id = 1)
 -------------------------------------------------- */
 const ensureSettingsRowExists = async () => {
+  await ensureColumn(db, 'settings', 'date_format', "VARCHAR(20) NOT NULL DEFAULT 'DD/MM/YYYY'");
   const [rows] = await db.query(
     `SELECT id FROM settings WHERE id = 1`
   );
@@ -89,7 +91,8 @@ exports.updateSettings = async (req, res) => {
       gst_number,
       gst_state_code,
 
-      currency_code
+      currency_code,
+      date_format
     } = req.body;
 
     const logoPath = req.file
@@ -118,6 +121,7 @@ exports.updateSettings = async (req, res) => {
         gst_state_code = ?,
 
         currency_code = ?,
+        date_format = ?,
         company_logo = COALESCE(?, company_logo)
 
       WHERE id = 1
@@ -143,6 +147,7 @@ exports.updateSettings = async (req, res) => {
         gst_number || '',
         gst_state_code || '',
         currency_code || 'INR',
+        ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'].includes(date_format) ? date_format : 'DD/MM/YYYY',
         logoPath
       ]
     );
@@ -176,4 +181,3 @@ exports.getNotificationChannelFlags = async (req, res) => {
     });
   }
 };
-

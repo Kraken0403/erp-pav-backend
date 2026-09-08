@@ -16,6 +16,8 @@ router.get('/quotations', quotationController.getQuotations);
 
 // Create a new quotation
 router.post('/quotations', quotationController.createQuotation);
+router.post('/quotations/preview', quotationPdfController.previewDraft);
+router.post('/quotations/:id/public-link', quotationController.createPublicQuotationLink);
 
 router.put('/quotations/:id/status', quotationController.updateQuotationStatus);
 router.post('/quotations/:id/send-email', quotationController.sendQuotationEmailById);

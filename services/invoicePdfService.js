@@ -74,7 +74,7 @@ async function getProforma(id) {
   // ensure template-friendly field: invoice_number (template expects invoice.invoice_number)
   proforma.invoice_number = proforma.proforma_number || proforma.invoice_number || null
 
-  const settingsRaw = await getCompanySettings()
+  const settingsRaw = await getCompanySettings(proforma)
   const preferredLogo = await getPreferredLogoUrl(settingsRaw)
   const company = {
     ...settingsRaw,
@@ -198,7 +198,7 @@ async function loadReceiptData(receiptNumber) {
   const invoice = await getInvoice(payment.invoice_id);
   if (!invoice) throw new Error('Invoice not found');
 
-  const settingsRaw = await getCompanySettings();
+  const settingsRaw = await getCompanySettings(invoice);
   const preferredLogo = await getPreferredLogoUrl(settingsRaw);
   const company = {
     ...settingsRaw,
@@ -280,7 +280,7 @@ async function loadInvoiceData(invoiceId) {
   invoice.issue_date_formatted = formatDate(invoice.issue_date)
   invoice.due_date_formatted = formatDate(invoice.due_date)
 
-  const settingsRaw = await getCompanySettings()
+  const settingsRaw = await getCompanySettings(invoice)
   const invoiceSettings = await getInvoiceSettings()
   const preferredLogo = await getPreferredLogoUrl(settingsRaw)
 
@@ -302,9 +302,41 @@ async function loadInvoiceData(invoiceId) {
    UTILS
 --------------------------------------------------------- */
 
-async function getCompanySettings() {
+async function getCompanySettings(document) {
   const [rows] = await db.query(`SELECT * FROM settings LIMIT 1`)
-  return rows[0] || {}
+  const defaults = rows[0] || {}
+  try {
+    let companyId = Number(document?.company_id || 0)
+    const sourceType = String(document?.source_type || '').toUpperCase()
+    const sourceId = Number(document?.source_id || 0)
+    if (!companyId && sourceId && sourceType.includes('QUOTATION')) {
+      const [[quotation]] = await db.query('SELECT company_id FROM quotations WHERE id = ? LIMIT 1', [sourceId])
+      companyId = Number(quotation?.company_id || 0)
+    } else if (!companyId && sourceId && sourceType.includes('WORK_ORDER')) {
+      const [[quotation]] = await db.query('SELECT q.company_id FROM work_orders wo LEFT JOIN quotations q ON q.id = wo.quotation_id WHERE wo.id = ? LIMIT 1', [sourceId])
+      companyId = Number(quotation?.company_id || 0)
+    } else if (!companyId && sourceId && sourceType.includes('PROFORMA')) {
+      const [[quotation]] = await db.query('SELECT q.company_id FROM proforma_invoices p LEFT JOIN quotations q ON q.id = p.source_id AND p.source_type LIKE ? WHERE p.id = ? LIMIT 1', ['%QUOTATION%', sourceId])
+      companyId = Number(quotation?.company_id || 0)
+    }
+    if (!companyId) return defaults
+    const [[company]] = await db.query('SELECT * FROM companies WHERE id = ? LIMIT 1', [companyId])
+    if (!company) return defaults
+    return {
+      ...defaults,
+      company_name: company.legal_name || company.name || defaults.company_name,
+      company_email: company.email || defaults.company_email,
+      company_phone: company.phone || defaults.company_phone,
+      company_logo: company.logo_url || defaults.company_logo,
+      company_address_line1: company.registered_address || company.address || defaults.company_address_line1,
+      company_city: company.registered_city || defaults.company_city,
+      company_state: company.registered_state || defaults.company_state,
+      company_pincode: company.registered_pincode || defaults.company_pincode,
+      gst_number: company.gst_number || defaults.gst_number,
+      pan_number: company.pan_number || defaults.pan_number,
+      website: company.website || defaults.website,
+    }
+  } catch (_) { return defaults }
 }
 
 async function getPreferredLogoUrl(companySettings = {}) {

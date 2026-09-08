@@ -10,6 +10,7 @@ const leadFieldRoutes = require("./routes/leadFieldRoutes");
 const userRoutes = require("./routes/userRoutes");
 const emailRoutes = require("./routes/emailRoutes");
 const workOrderRoutes = require("./routes/workOrderRoute");
+const workOrderSettingsRoutes = require("./routes/workOrderSettingsRoutes");
 // const workOrderItemsRoutes = require('./routes/workOrderItemsRoutes');
 const productRoutes = require("./routes/productRoutes");
 const quotationRoutes = require("./routes/quotationRoutes");
@@ -50,6 +51,8 @@ const {
   isRazorpayEnabled,
   isWhatsAppEnabled,
 } = require("./config/featureFlags");
+const db = require("./config/db");
+const { ensurePavilionSchema } = require("./utils/pavilionSchema");
 
 const cookieParser = require("cookie-parser");
 const path = require("path");
@@ -206,6 +209,7 @@ app.use("/api/meetings", meetingRoutes); // For Meeting Routes
 app.use("/api", userRoutes);
 app.use("/api", emailRoutes);
 app.use("/api", workOrderRoutes); // For work
+app.use("/api", workOrderSettingsRoutes);
 // app.use('/api', workOrderItemsRoutes);
 app.use("/api", productRoutes); // For product routes
 app.use("/api", quotationRoutes); // For product routes
@@ -482,8 +486,14 @@ try {
   );
 }
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
+  try {
+    await ensurePavilionSchema(db);
+    console.log("Pavilion database schema verified");
+  } catch (e) {
+    console.error("Failed to verify Pavilion database schema:", e && e.message ? e.message : e);
+  }
   try {
     startPaymentReminderScheduler();
   } catch (e) {

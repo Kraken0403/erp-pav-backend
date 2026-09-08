@@ -132,21 +132,21 @@ async function buildLeadSnapshots(conn, leadId) {
     return { billing: null, shipping: null, lead: null }
   }
 
-  const [[lead]] = await conn.query(`SELECT * FROM leads WHERE id = ?`, [leadId])
+  const [[lead]] = await conn.query(`SELECT l.*, c.name AS linked_company_name, c.gst_number AS linked_company_gst, c.billing_address AS company_billing_address, c.billing_city AS company_billing_city, c.billing_state AS company_billing_state, c.billing_pincode AS company_billing_pincode, c.shipping_address AS company_shipping_address, c.shipping_city AS company_shipping_city, c.shipping_state AS company_shipping_state, c.shipping_pincode AS company_shipping_pincode FROM leads l LEFT JOIN companies c ON c.id = l.company_id WHERE l.id = ?`, [leadId])
   if (!lead) throw new Error('Lead not found')
 
   const billing = {
     name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
-    company: lead.company_name || '',
+    company: lead.linked_company_name || lead.company_name || '',
     phone: lead.phone_number || '',
     email: lead.email || '',
-    gst: lead.gst_number || '',
+    gst: lead.linked_company_gst || lead.gst_number || '',
 
-    address: lead.billing_address || '',
+    address: lead.company_billing_address || lead.billing_address || '',
     landmark: lead.billing_landmark || '',
-    city: lead.billing_city || '',
-    state: lead.billing_state || '',
-    pincode: lead.billing_pincode || '',
+    city: lead.company_billing_city || lead.billing_city || '',
+    state: lead.company_billing_state || lead.billing_state || '',
+    pincode: lead.company_billing_pincode || lead.billing_pincode || '',
     country: 'India',
   }
 
@@ -157,11 +157,11 @@ async function buildLeadSnapshots(conn, leadId) {
     email: billing.email,
     gst: billing.gst,
 
-    address: lead.shipping_address || lead.billing_address || '',
+    address: lead.company_shipping_address || lead.company_billing_address || lead.shipping_address || lead.billing_address || '',
     landmark: lead.shipping_landmark || lead.billing_landmark || '',
-    city: lead.shipping_city || lead.billing_city || '',
-    state: lead.shipping_state || lead.billing_state || '',
-    pincode: lead.shipping_pincode || lead.billing_pincode || '',
+    city: lead.company_shipping_city || lead.company_billing_city || lead.shipping_city || lead.billing_city || '',
+    state: lead.company_shipping_state || lead.company_billing_state || lead.shipping_state || lead.billing_state || '',
+    pincode: lead.company_shipping_pincode || lead.company_billing_pincode || lead.shipping_pincode || lead.billing_pincode || '',
     country: 'India',
   }
 
@@ -787,25 +787,6 @@ const createProformaInvoiceFromQuotation = async (req, res) => {
       })
     }
 
-    // Prevent duplicates: if any invoice (tax or proforma) already exists
-    // for this quotation (or linked work order), return early.
-    try {
-      const existingInvoice = await findExistingInvoiceForSource(conn, 'QUOTATION', safeQuotationId)
-      if (existingInvoice) {
-        await conn.commit()
-        conn.release()
-        return res.status(200).json({
-          message: 'Invoice already exists for this quotation',
-          id: existingInvoice.id,
-          invoice_number: existingInvoice.invoice_number,
-          already_existed: true,
-        })
-      }
-    } catch (e) {
-      // Non-fatal: proceed to proforma creation if the check fails unexpectedly
-      console.warn('Failed to verify existing invoice for quotation before creating proforma:', e && e.message ? e.message : e)
-    }
-
     const [[quotation]] = await conn.query(
       `SELECT * FROM quotations WHERE id = ? LIMIT 1`,
       [safeQuotationId]
@@ -932,7 +913,7 @@ const createProformaInvoiceFromQuotation = async (req, res) => {
       igst_total: totals.igst_total,
       grand_total: discountedTotals.grand_total,
       rounding_amount: roundingAmount,
-      notes: quotation.notes || null,
+      notes: req.body?.notes || quotation.notes || null,
       billing_snapshot: billing ? JSON.stringify(billing) : null,
       shipping_snapshot: shipping ? JSON.stringify(shipping) : null,
       gst_pricing_mode: gstPricingMode,
@@ -1428,6 +1409,28 @@ const getProformaInvoiceById = async (req, res) => {
     Object.assign(invoice, display.document)
     invoice.items = display.items
 
+    let quotation = null
+    let workOrder = null
+    if (srcType.includes('QUOTATION') && srcId) {
+      const [[linkedQuotation]] = await db.query(`SELECT id, quotation_number, status FROM quotations WHERE id = ? LIMIT 1`, [srcId])
+      quotation = linkedQuotation || null
+      const [[linkedWorkOrder]] = await db.query(`SELECT id, work_order_number, status FROM work_orders WHERE quotation_id = ? ORDER BY id DESC LIMIT 1`, [srcId])
+      workOrder = linkedWorkOrder || null
+    } else if (srcType.includes('WORK_ORDER') && srcId) {
+      const [[linkedWorkOrder]] = await db.query(`SELECT id, work_order_number, quotation_id, status FROM work_orders WHERE id = ? LIMIT 1`, [srcId])
+      workOrder = linkedWorkOrder || null
+      if (linkedWorkOrder?.quotation_id) {
+        const [[linkedQuotation]] = await db.query(`SELECT id, quotation_number, status FROM quotations WHERE id = ? LIMIT 1`, [linkedWorkOrder.quotation_id])
+        quotation = linkedQuotation || null
+      }
+    }
+    let taxInvoice = null
+    if (invoice.tax_invoice_id) {
+      const [[linkedTaxInvoice]] = await db.query(`SELECT id, invoice_number, status FROM invoices WHERE id = ? LIMIT 1`, [invoice.tax_invoice_id])
+      taxInvoice = linkedTaxInvoice || null
+    }
+    invoice.related_documents = { quotation, work_order: workOrder, tax_invoice: taxInvoice }
+
     return res.status(200).json(invoice)
   } catch (err) {
     return res.status(500).json({ error: err.message })
@@ -1480,6 +1483,60 @@ const getInvoiceById = async (req, res) => {
       refNumber: p.reference_number,
       remark: p.notes
     }));
+
+    const sourceType = String(invoice.source_type || '').toUpperCase();
+    const sourceId = Number(invoice.source_id || 0);
+    let quotationId = null;
+    let workOrder = null;
+    let proformaInvoice = null;
+
+    if (sourceType.includes('WORK_ORDER') && sourceId) {
+      const [[linkedWorkOrder]] = await db.query(
+        `SELECT id, work_order_number, quotation_id, status FROM work_orders WHERE id = ? LIMIT 1`,
+        [sourceId]
+      );
+      workOrder = linkedWorkOrder || null;
+      quotationId = linkedWorkOrder?.quotation_id || null;
+      const [[linkedProforma]] = await db.query(
+        `SELECT id, proforma_number, status FROM proforma_invoices WHERE source_type LIKE '%WORK_ORDER%' AND source_id = ? ORDER BY id DESC LIMIT 1`,
+        [sourceId]
+      );
+      proformaInvoice = linkedProforma || null;
+    } else if (sourceType.includes('QUOTATION') && sourceId) {
+      quotationId = sourceId;
+      const [[linkedWorkOrder]] = await db.query(
+        `SELECT id, work_order_number, quotation_id, status FROM work_orders WHERE quotation_id = ? ORDER BY id DESC LIMIT 1`,
+        [quotationId]
+      );
+      workOrder = linkedWorkOrder || null;
+      const [[linkedProforma]] = await db.query(
+        `SELECT id, proforma_number, status FROM proforma_invoices WHERE source_type LIKE '%QUOTATION%' AND source_id = ? ORDER BY id DESC LIMIT 1`,
+        [quotationId]
+      );
+      proformaInvoice = linkedProforma || null;
+    } else if (sourceType.includes('PROFORMA') && sourceId) {
+      const [[linkedProforma]] = await db.query(
+        `SELECT id, proforma_number, status, source_type, source_id FROM proforma_invoices WHERE id = ? LIMIT 1`,
+        [sourceId]
+      );
+      proformaInvoice = linkedProforma || null;
+      if (String(linkedProforma?.source_type || '').toUpperCase().includes('QUOTATION')) quotationId = linkedProforma.source_id;
+      if (String(linkedProforma?.source_type || '').toUpperCase().includes('WORK_ORDER')) {
+        const [[linkedWorkOrder]] = await db.query(`SELECT id, work_order_number, quotation_id, status FROM work_orders WHERE id = ? LIMIT 1`, [linkedProforma.source_id]);
+        workOrder = linkedWorkOrder || null;
+        quotationId = linkedWorkOrder?.quotation_id || null;
+      }
+    }
+
+    let quotation = null;
+    if (quotationId) {
+      const [[linkedQuotation]] = await db.query(
+        `SELECT id, quotation_number, status FROM quotations WHERE id = ? AND status IN ('approved', 'converted') LIMIT 1`,
+        [quotationId]
+      );
+      quotation = linkedQuotation || null;
+    }
+    invoice.related_documents = { quotation, work_order: workOrder, proforma_invoice: proformaInvoice };
 
     return res.status(200).json(invoice);
   } catch (err) {

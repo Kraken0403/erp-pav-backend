@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { addColumnIfMissing, getTableColumns } = require('../utils/dbSchema');
+const { ensureProductCatalogSchema, ensureQuotationShareSchema } = require('../utils/pavilionSchema');
 
 async function tableExists(conn, tableName) {
   const [rows] = await conn.query(
@@ -76,6 +77,16 @@ async function main() {
     await backfillEventCompatibility(conn, 'leads');
 
     await ensureColumn(conn, 'quotation_settings', 'logo_url', 'TEXT NULL');
+    await ensureColumn(conn, 'quotation_settings', 'template_config_json', 'LONGTEXT NULL');
+
+    await ensureProductCatalogSchema(conn);
+    if (!(await tableExists(conn, 'product_bundle_items'))) {
+      throw new Error('product_bundle_items was not created');
+    }
+    console.log('✅ Product catalog relation tables are ready');
+
+    await ensureQuotationShareSchema(conn);
+    console.log('✅ Quotation sharing and layout columns are ready');
 
     console.log('🎉 Pavilion ERP hotfix schema migration completed.');
   } catch (error) {

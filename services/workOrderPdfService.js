@@ -221,6 +221,11 @@ async function getWorkOrder(id) {
 
 async function getPdfSettings() {
   const [quotationRows] = await db.query(`SELECT * FROM quotation_settings LIMIT 1`);
+  let workOrderSettings = {};
+  try {
+    const [workOrderRows] = await db.query(`SELECT * FROM work_order_settings WHERE id = 1 LIMIT 1`);
+    workOrderSettings = workOrderRows[0] || {};
+  } catch (_) { /* The startup schema check will create this table for older installs. */ }
   const [mainRows] = await db.query(
     `SELECT company_logo, business_type FROM settings WHERE id = 1 LIMIT 1`
   );
@@ -233,6 +238,7 @@ async function getPdfSettings() {
 
   return {
     ...quotationSettings,
+    ...workOrderSettings,
     business_type: quotationSettings.business_type || mainSettings.business_type || 'GENERAL',
     logo_url: internalLogo || mainLogo,
   };

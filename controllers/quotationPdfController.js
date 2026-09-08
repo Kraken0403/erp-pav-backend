@@ -1,6 +1,7 @@
 const {
   generatePdf,
   generateHtml,
+  generatePreviewHtml,
 } = require('../services/quotationPdfService')
 
 const encodeContentDispositionFilename = (filename) => {
@@ -54,5 +55,15 @@ exports.previewHtml = async (req, res) => {
   } catch (error) {
     console.error('PDF preview error:', error)
     res.status(500).send(error.message)
+  }
+}
+
+exports.previewDraft = async (req, res) => {
+  try {
+    const html = await generatePreviewHtml(req.body || {})
+    res.json({ html })
+  } catch (error) {
+    console.error('Quotation draft preview error:', error)
+    res.status(500).json({ message: error.message })
   }
 }

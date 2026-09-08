@@ -44,20 +44,20 @@ async function buildLeadSnapshots(conn, leadId) {
   if (!leadId) {
     return { billing: null, shipping: null, lead: null }
   }
-  const [[lead]] = await conn.query(`SELECT * FROM leads WHERE id = ?`, [leadId])
+  const [[lead]] = await conn.query(`SELECT l.*, c.name AS linked_company_name, c.gst_number AS linked_company_gst, c.billing_address AS company_billing_address, c.billing_city AS company_billing_city, c.billing_state AS company_billing_state, c.billing_pincode AS company_billing_pincode, c.shipping_address AS company_shipping_address, c.shipping_city AS company_shipping_city, c.shipping_state AS company_shipping_state, c.shipping_pincode AS company_shipping_pincode FROM leads l LEFT JOIN companies c ON c.id = l.company_id WHERE l.id = ?`, [leadId])
   if (!lead) throw new Error('Lead not found')
   // ...same as invoiceController.js...
   const billing = {
     name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
-    company: lead.company_name || '',
+    company: lead.linked_company_name || lead.company_name || '',
     phone: lead.phone_number || '',
     email: lead.email || '',
-    gst: lead.gst_number || '',
-    address: lead.billing_address || '',
+    gst: lead.linked_company_gst || lead.gst_number || '',
+    address: lead.company_billing_address || lead.billing_address || '',
     landmark: lead.billing_landmark || '',
-    city: lead.billing_city || '',
-    state: lead.billing_state || '',
-    pincode: lead.billing_pincode || '',
+    city: lead.company_billing_city || lead.billing_city || '',
+    state: lead.company_billing_state || lead.billing_state || '',
+    pincode: lead.company_billing_pincode || lead.billing_pincode || '',
     country: 'India',
   }
   const shipping = {
@@ -66,11 +66,11 @@ async function buildLeadSnapshots(conn, leadId) {
     phone: billing.phone,
     email: billing.email,
     gst: billing.gst,
-    address: lead.shipping_address || lead.billing_address || '',
+    address: lead.company_shipping_address || lead.company_billing_address || lead.shipping_address || lead.billing_address || '',
     landmark: lead.shipping_landmark || lead.billing_landmark || '',
-    city: lead.shipping_city || lead.billing_city || '',
-    state: lead.shipping_state || lead.billing_state || '',
-    pincode: lead.shipping_pincode || lead.billing_pincode || '',
+    city: lead.company_shipping_city || lead.company_billing_city || lead.shipping_city || lead.billing_city || '',
+    state: lead.company_shipping_state || lead.company_billing_state || lead.shipping_state || lead.billing_state || '',
+    pincode: lead.company_shipping_pincode || lead.company_billing_pincode || lead.shipping_pincode || lead.billing_pincode || '',
     country: 'India',
   }
   return { billing, shipping, lead }
@@ -121,6 +121,20 @@ const createProformaInvoice = async (req, res) => {
     conn = await db.getConnection()
     await conn.beginTransaction()
 
+    const normalizedSourceType = String(source_type || 'MANUAL_PROFORMA').toUpperCase()
+    const normalizedSourceId = Number(source_id || 0)
+    if (normalizedSourceId) {
+      const [[existing]] = await conn.query(
+        `SELECT id, proforma_number FROM proforma_invoices WHERE source_type = ? AND source_id = ? LIMIT 1`,
+        [normalizedSourceType, normalizedSourceId]
+      )
+      if (existing) {
+        await conn.commit()
+        conn.release()
+        return res.status(200).json({ ...existing, already_existed: true })
+      }
+    }
+
     const companySettings = await getCompanySettings(conn)
     const gstPricingMode = companySettings?.gst_pricing_mode || 'EXCLUSIVE'
     const { billing, shipping, lead } = await buildLeadSnapshots(conn, lead_id)
@@ -169,6 +183,16 @@ const createProformaInvoice = async (req, res) => {
         [srcId]
       )
       documentDiscountAmount = Math.max(0, Number(qRow?.quotation_discount_amount || 0))
+    } else if (srcType.includes('WORK_ORDER') && srcId) {
+      const [[workOrder]] = await conn.query(
+        `SELECT quotation_id, subtotal, grand_total, total_amount FROM work_orders WHERE id = ? LIMIT 1`,
+        [srcId]
+      )
+      documentDiscountAmount = Math.max(0, Number(workOrder?.subtotal || 0) - Number(workOrder?.total_amount || workOrder?.grand_total || 0))
+      if (!documentDiscountAmount && workOrder?.quotation_id) {
+        const [[quotation]] = await conn.query(`SELECT quotation_discount_amount FROM quotations WHERE id = ? LIMIT 1`, [workOrder.quotation_id])
+        documentDiscountAmount = Math.max(0, Number(quotation?.quotation_discount_amount || 0))
+      }
     }
 
     const totals = computeInvoiceTotals(computedItems)

@@ -97,22 +97,22 @@ async function buildLeadSnapshots(conn, leadId) {
     return { billing: null, shipping: null, lead: null }
   }
 
-  const [[lead]] = await conn.query(`SELECT * FROM leads WHERE id = ?`, [leadId])
+  const [[lead]] = await conn.query(`SELECT l.*, c.name AS linked_company_name, c.gst_number AS linked_company_gst, c.billing_address AS company_billing_address, c.billing_city AS company_billing_city, c.billing_state AS company_billing_state, c.billing_pincode AS company_billing_pincode, c.shipping_address AS company_shipping_address, c.shipping_city AS company_shipping_city, c.shipping_state AS company_shipping_state, c.shipping_pincode AS company_shipping_pincode FROM leads l LEFT JOIN companies c ON c.id = l.company_id WHERE l.id = ?`, [leadId])
   if (!lead) {
     return { billing: null, shipping: null, lead: null }
   }
 
   const billing = {
     name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
-    company: lead.company_name || '',
+    company: lead.linked_company_name || lead.company_name || '',
     phone: lead.phone_number || '',
     email: lead.email || '',
-    gst: lead.gst_number || '',
-    address: lead.billing_address || '',
+    gst: lead.linked_company_gst || lead.gst_number || '',
+    address: lead.company_billing_address || lead.billing_address || '',
     landmark: lead.billing_landmark || '',
-    city: lead.billing_city || '',
-    state: lead.billing_state || '',
-    pincode: lead.billing_pincode || '',
+    city: lead.company_billing_city || lead.billing_city || '',
+    state: lead.company_billing_state || lead.billing_state || '',
+    pincode: lead.company_billing_pincode || lead.billing_pincode || '',
     country: 'India',
   }
 
@@ -122,11 +122,11 @@ async function buildLeadSnapshots(conn, leadId) {
     phone: billing.phone,
     email: billing.email,
     gst: billing.gst,
-    address: lead.shipping_address || lead.billing_address || '',
+    address: lead.company_shipping_address || lead.company_billing_address || lead.shipping_address || lead.billing_address || '',
     landmark: lead.shipping_landmark || lead.billing_landmark || '',
-    city: lead.shipping_city || lead.billing_city || '',
-    state: lead.shipping_state || lead.billing_state || '',
-    pincode: lead.shipping_pincode || lead.billing_pincode || '',
+    city: lead.company_shipping_city || lead.company_billing_city || lead.shipping_city || lead.billing_city || '',
+    state: lead.company_shipping_state || lead.company_billing_state || lead.shipping_state || lead.billing_state || '',
+    pincode: lead.company_shipping_pincode || lead.company_billing_pincode || lead.shipping_pincode || lead.billing_pincode || '',
     country: 'India',
   }
 

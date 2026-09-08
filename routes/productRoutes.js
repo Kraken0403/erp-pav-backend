@@ -17,6 +17,12 @@ router.post('/products', productController.createProduct);
 router.put('/products/:id', productController.updateProduct);
 router.delete('/products/:id', productController.deleteProduct);
 router.post('/products/bulk-import', upload.single('file'), productBulkImportController.bulkImportProducts);
+router.get('/product-units', productController.getProductUnits);
+router.post('/product-units', productController.createProductUnit);
+router.get('/products/:id/vendors', productController.getProductVendors);
+router.post('/products/:id/vendors', productController.addProductVendor);
+router.delete('/products/:id/vendors/:vendorId', productController.removeProductVendor);
+router.get('/products/:id/analytics', productController.getProductAnalytics);
 
 
 // -------------------- ATTRIBUTES --------------------

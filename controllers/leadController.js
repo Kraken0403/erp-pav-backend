@@ -7,6 +7,13 @@ const {
   resolveUserIdByAssignment,
 } = require("../services/notificationService");
 
+const ensureLeadCompanySchema = async (connection = db) => {
+  const [columns] = await connection.query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'leads'");
+  const existing = new Set(columns.map((row) => String(row.COLUMN_NAME).toLowerCase()));
+  if (!existing.has('company_id')) await connection.query('ALTER TABLE leads ADD COLUMN company_id INT NULL');
+  if (!existing.has('designation')) await connection.query('ALTER TABLE leads ADD COLUMN designation VARCHAR(150) NULL');
+};
+
 // Helper to normalize datetime without timezone shifting
 const normalizeDateTime = (value) => {
   if (!value) return null;
@@ -144,6 +151,8 @@ exports.createLead = async (req, res) => {
     first_name,
     last_name,
     company_name,
+    company_id,
+    designation,
     lead_status,
     email,
     phone,
@@ -240,6 +249,7 @@ exports.createLead = async (req, res) => {
   try {
     connection = await db.getConnection();
     await connection.beginTransaction();
+    await ensureLeadCompanySchema(connection);
 
     const cateringEnabled = await isCateringBusiness(connection);
 
@@ -282,6 +292,8 @@ exports.createLead = async (req, res) => {
       "first_name",
       "last_name",
       "company_name",
+      "company_id",
+      "designation",
       "lead_status",
       "email",
       "phone_number",
@@ -325,6 +337,8 @@ exports.createLead = async (req, res) => {
       first_name: finalFirstName,
       last_name: finalLastName,
       company_name: finalCompanyName,
+      company_id: company_id || null,
+      designation: designation || null,
       lead_status: finalLeadStatus,
       email: email,
       phone_number: finalPhoneNumber,
@@ -445,6 +459,7 @@ exports.createLead = async (req, res) => {
 ============================================================ */
 exports.getAllLeads = async (req, res) => {
   try {
+    await ensureLeadCompanySchema(db);
     const [leads] = await db.query("SELECT * FROM leads");
 
     if (!leads.length) {
@@ -524,6 +539,7 @@ exports.getLeadsForUser = async (req, res) => {
 ============================================================ */
 exports.getLeadById = async (req, res) => {
   try {
+    await ensureLeadCompanySchema(db);
     const { id } = req.params;
 
     const [rows] = await db.query("SELECT * FROM leads WHERE id = ?", [id]);
@@ -562,6 +578,8 @@ exports.updateLead = async (req, res) => {
     first_name,
     last_name,
     company_name,
+    company_id,
+    designation,
     lead_status,
     email,
     phone,
@@ -606,6 +624,7 @@ exports.updateLead = async (req, res) => {
   try {
     connection = await db.getConnection();
     await connection.beginTransaction();
+    await ensureLeadCompanySchema(connection);
 
     // ✅ Get existing source first
     const [[existingLead]] = await connection.query(
@@ -654,6 +673,8 @@ exports.updateLead = async (req, res) => {
       company_name,
       existingLead.company_name,
     );
+    const finalCompanyId = pickDefined(company_id, existingLead.company_id);
+    const finalDesignation = pickDefined(designation, existingLead.designation);
     const finalLeadStatus = pickDefined(lead_status, existingLead.lead_status);
     const finalEmail = pickDefined(email, existingLead.email);
     const finalPhoneNumber = pickDefined(
@@ -803,6 +824,8 @@ exports.updateLead = async (req, res) => {
         first_name = ?, 
         last_name = ?, 
         company_name = ?, 
+        company_id = ?,
+        designation = ?,
         lead_status = ?, 
         email = ?, 
         phone_number = ?, 
@@ -841,6 +864,8 @@ exports.updateLead = async (req, res) => {
         finalFirstName,
         finalLastName,
         finalCompanyName,
+        finalCompanyId || null,
+        finalDesignation,
         finalLeadStatus,
         finalEmail,
         finalPhoneNumber,

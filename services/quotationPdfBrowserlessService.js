@@ -1,20 +1,11 @@
-const { generateHtml } = require('./quotationPdfService');
-const { generatePdfFromHtml } = require('./puppetPdfService');
+const { generatePdf } = require('./quotationPdfService');
 
 exports.generatePdfViaBrowserless = async (quotationId) => {
-    const html = await generateHtml(quotationId);
+    if (!quotationId) {
+        throw new Error('Quotation id is required');
+    }
 
-    return generatePdfFromHtml(html, {
-        payloadOverrides: {
-            format: 'A4',
-            printBackground: true,
-            displayHeaderFooter: false,
-            margin: {
-                top: '20mm',
-                bottom: '28mm',
-                left: '15mm',
-                right: '15mm',
-            },
-        },
-    });
+    // Keep this compatibility endpoint on the exact same quotation builder
+    // renderer/options as every other quotation PDF path.
+    return generatePdf(quotationId);
 };

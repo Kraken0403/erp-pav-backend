@@ -5,6 +5,8 @@ const registerHelpers = (hb = Handlebars) => {
 
   hb.registerHelper('eq', (a, b) => a === b)
 
+  hb.registerHelper('hasColumn', (columns, key) => Array.isArray(columns) && columns.includes(key))
+
   hb.registerHelper('currency', (v) => {
     const n = Number(v)
     if (Number.isNaN(n)) return ''

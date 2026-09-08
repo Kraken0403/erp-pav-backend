@@ -1,6 +1,7 @@
 
 // Fetch all users
 const db = require('../config/db');
+const bcrypt = require('bcryptjs');
 const { ensureVendorSchema } = require('../utils/pavilionSchema');
 
 const VISIBILITY_MODULE_KEYS = [
@@ -40,6 +41,59 @@ const getAuthenticatedUserId = (req) =>
 
 const isAuthenticatedAdmin = (req) =>
   String(req.user?.role || req.user?.roleName || '').toLowerCase() === 'admin';
+
+const USER_PROFILE_ADDRESS_COLUMNS = [
+  'shipping_address',
+  'shipping_landmark',
+  'shipping_pincode',
+  'billing_address',
+  'billing_landmark',
+  'billing_pincode',
+];
+
+const getAvailableUserProfileColumns = async () => {
+  try {
+    const [rows] = await db.query(
+      `
+      SELECT COLUMN_NAME
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'users'
+        AND COLUMN_NAME IN (${USER_PROFILE_ADDRESS_COLUMNS.map(() => '?').join(', ')})
+      `,
+      USER_PROFILE_ADDRESS_COLUMNS
+    );
+    return new Set(rows.map((row) => row.COLUMN_NAME));
+  } catch (_) {
+    return new Set();
+  }
+};
+
+const loadUserProfileRecord = async (userId) => {
+  const availableColumns = await getAvailableUserProfileColumns();
+  const optionalSelect = USER_PROFILE_ADDRESS_COLUMNS
+    .filter((column) => availableColumns.has(column))
+    .map((column) => `u.\`${column}\``);
+  const [rows] = await db.query(
+    `
+    SELECT
+      u.id,
+      u.name,
+      u.email,
+      u.phone_number,
+      u.role,
+      u.role_id,
+      r.name AS role_name
+      ${optionalSelect.length ? `, ${optionalSelect.join(', ')}` : ''}
+    FROM users u
+    LEFT JOIN roles r ON r.id = u.role_id
+    WHERE u.id = ?
+    LIMIT 1
+    `,
+    [userId]
+  );
+  return { profile: rows[0] || null, availableColumns };
+};
 
 const USER_ASSIGNMENT_COLUMN_CANDIDATES = [
   'assigned_to',
@@ -328,41 +382,17 @@ exports.updateUser = async (req, res) => {
 
 exports.getMyProfile = async (req, res) => {
   try {
-    const userId = Number(req.user?.id);
+    const userId = getAuthenticatedUserId(req);
 
-    if (!Number.isInteger(userId)) {
+    if (!Number.isInteger(userId) || userId <= 0) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const [rows] = await db.query(
-      `
-      SELECT
-        u.id,
-        u.name,
-        u.email,
-        u.phone_number,
-        u.role,
-        u.role_id,
-        r.name AS role_name,
-        u.shipping_address,
-        u.shipping_landmark,
-        u.shipping_pincode,
-        u.billing_address,
-        u.billing_landmark,
-        u.billing_pincode
-      FROM users u
-      LEFT JOIN roles r ON r.id = u.role_id
-      WHERE u.id = ?
-      LIMIT 1
-      `,
-      [userId]
-    );
+    const { profile } = await loadUserProfileRecord(userId);
 
-    if (!rows.length) {
+    if (!profile) {
       return res.status(404).json({ error: 'User not found' });
     }
-
-    const profile = rows[0];
 
     // attempt to fetch a matching customer record by email to prefill profile
     try {
@@ -393,7 +423,7 @@ exports.getMyProfile = async (req, res) => {
 
 exports.updateMyProfile = async (req, res) => {
   try {
-    const userId = Number(req.user?.id);
+    const userId = getAuthenticatedUserId(req);
     const {
       name,
       email,
@@ -410,34 +440,12 @@ exports.updateMyProfile = async (req, res) => {
       billing_landmark,
       billing_pincode,
     } = req.body || {};
-    const normalizedPhone = String(phone_number || '').trim() || null;
-    // prefer single-address keys when provided
-    const normalizedShippingAddress = (typeof address !== 'undefined' && address !== null)
-      ? String(address).trim()
-      : (shipping_address ? String(shipping_address).trim() : null);
-    const normalizedShippingLandmark = (typeof landmark !== 'undefined' && landmark !== null)
-      ? String(landmark).trim()
-      : (shipping_landmark ? String(shipping_landmark).trim() : null);
-    const normalizedShippingPincode = (typeof pincode !== 'undefined' && pincode !== null)
-      ? String(pincode).trim()
-      : (shipping_pincode ? String(shipping_pincode).trim() : null);
-    const normalizedBillingAddress = (typeof address !== 'undefined' && address !== null)
-      ? String(address).trim()
-      : (billing_address ? String(billing_address).trim() : null);
-    const normalizedBillingLandmark = (typeof landmark !== 'undefined' && landmark !== null)
-      ? String(landmark).trim()
-      : (billing_landmark ? String(billing_landmark).trim() : null);
-    const normalizedBillingPincode = (typeof pincode !== 'undefined' && pincode !== null)
-      ? String(pincode).trim()
-      : (billing_pincode ? String(billing_pincode).trim() : null);
-
-    if (!Number.isInteger(userId)) {
+    if (!Number.isInteger(userId) || userId <= 0) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Load existing user to allow partial updates
     const [existingRows] = await db.query(
-      `SELECT id, name, email, phone_number, shipping_address, shipping_landmark, shipping_pincode, billing_address, billing_landmark, billing_pincode FROM users WHERE id = ? LIMIT 1`,
+      `SELECT id, name, email, phone_number FROM users WHERE id = ? LIMIT 1`,
       [userId]
     );
 
@@ -450,12 +458,6 @@ exports.updateMyProfile = async (req, res) => {
     const finalName = (typeof name !== 'undefined' && name !== null) ? String(name).trim() : existing.name;
     const finalEmail = (typeof email !== 'undefined' && email !== null) ? String(email).trim() : existing.email;
     const finalPhone = (typeof phone_number !== 'undefined' && phone_number !== null) ? String(phone_number).trim() || null : existing.phone_number;
-    const finalShippingAddress = (typeof shipping_address !== 'undefined') ? (shipping_address ? String(shipping_address).trim() : null) : existing.shipping_address;
-    const finalShippingLandmark = (typeof shipping_landmark !== 'undefined') ? (shipping_landmark ? String(shipping_landmark).trim() : null) : existing.shipping_landmark;
-    const finalShippingPincode = (typeof shipping_pincode !== 'undefined') ? (shipping_pincode ? String(shipping_pincode).trim() : null) : existing.shipping_pincode;
-    const finalBillingAddress = (typeof billing_address !== 'undefined') ? (billing_address ? String(billing_address).trim() : null) : existing.billing_address;
-    const finalBillingLandmark = (typeof billing_landmark !== 'undefined') ? (billing_landmark ? String(billing_landmark).trim() : null) : existing.billing_landmark;
-    const finalBillingPincode = (typeof billing_pincode !== 'undefined') ? (billing_pincode ? String(billing_pincode).trim() : null) : existing.billing_pincode;
 
     // Validate email uniqueness only if changed
     if (finalEmail && finalEmail !== existing.email) {
@@ -479,59 +481,39 @@ exports.updateMyProfile = async (req, res) => {
       }
     }
 
+    const availableColumns = await getAvailableUserProfileColumns();
+    const addressValues = {
+      shipping_address: typeof address !== 'undefined' ? address : shipping_address,
+      shipping_landmark: typeof landmark !== 'undefined' ? landmark : shipping_landmark,
+      shipping_pincode: typeof pincode !== 'undefined' ? pincode : shipping_pincode,
+      billing_address: typeof address !== 'undefined' ? address : billing_address,
+      billing_landmark: typeof landmark !== 'undefined' ? landmark : billing_landmark,
+      billing_pincode: typeof pincode !== 'undefined' ? pincode : billing_pincode,
+    };
+    const setClauses = ['name = ?', 'email = ?', 'phone_number = ?'];
+    const values = [finalName, finalEmail, finalPhone];
+    USER_PROFILE_ADDRESS_COLUMNS.forEach((column) => {
+      if (availableColumns.has(column) && typeof addressValues[column] !== 'undefined') {
+        const value = addressValues[column];
+        setClauses.push(`\`${column}\` = ?`);
+        values.push(value === null || value === '' ? null : String(value).trim());
+      }
+    });
+    values.push(userId);
     const [result] = await db.query(
-      `
-      UPDATE users
-      SET name = ?, email = ?, phone_number = ?,
-          shipping_address = ?, shipping_landmark = ?, shipping_pincode = ?,
-          billing_address = ?, billing_landmark = ?, billing_pincode = ?
-      WHERE id = ?
-      `,
-      [
-        finalName,
-        finalEmail,
-        finalPhone,
-        finalShippingAddress,
-        finalShippingLandmark,
-        finalShippingPincode,
-        finalBillingAddress,
-        finalBillingLandmark,
-        finalBillingPincode,
-        userId,
-      ]
+      `UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`,
+      values
     );
 
     if (!result.affectedRows) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const [rows] = await db.query(
-      `
-      SELECT
-        u.id,
-        u.name,
-        u.email,
-        u.phone_number,
-        u.role,
-        u.role_id,
-        r.name AS role_name,
-        u.shipping_address,
-        u.shipping_landmark,
-        u.shipping_pincode,
-        u.billing_address,
-        u.billing_landmark,
-        u.billing_pincode
-      FROM users u
-      LEFT JOIN roles r ON r.id = u.role_id
-      WHERE u.id = ?
-      LIMIT 1
-      `,
-      [userId]
-    );
+    const { profile } = await loadUserProfileRecord(userId);
 
     return res.status(200).json({
       message: 'Profile updated successfully',
-      user: rows[0] || null,
+      user: profile,
     });
   } catch (err) {
     console.error('updateMyProfile error:', err);
@@ -545,6 +527,28 @@ exports.updateMyProfile = async (req, res) => {
       return res.status(400).json({ error: 'Duplicate user details found' });
     }
     return res.status(500).json({ error: 'Failed to update profile', details: err.message });
+  }
+};
+
+exports.changeMyPassword = async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    const { currentPassword, newPassword } = req.body || {};
+    if (!Number.isInteger(userId) || userId <= 0 || !currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+    const [rows] = await db.query('SELECT password FROM users WHERE id = ? LIMIT 1', [userId]);
+    if (!rows.length || !(await bcrypt.compare(String(currentPassword), rows[0].password))) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+    await db.query('UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?', [await bcrypt.hash(String(newPassword), 10), userId]);
+    return res.status(200).json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('changeMyPassword error:', err);
+    return res.status(500).json({ error: 'Failed to update password' });
   }
 };
 

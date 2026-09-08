@@ -8,6 +8,7 @@ router.use(authenticateJWT);
 
 router.get('/users/me/profile', userController.getMyProfile);
 router.put('/users/me/profile', userController.updateMyProfile);
+router.put('/users/me/password', userController.changeMyPassword);
 
 router.get('/users', userController.getAllUsers)
 router.get('/users/:id', userController.getUserById);

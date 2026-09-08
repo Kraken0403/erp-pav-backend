@@ -38,12 +38,14 @@ const parseDateInput = (dateInput) => {
   return null;
 };
 
-const formatDate = (dateInput) => {
+const formatDate = (dateInput, dateFormat = 'DD/MM/YYYY') => {
   const d = parseDateInput(dateInput);
   if (!d) return '';
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
+  if (dateFormat === 'MM/DD/YYYY') return `${month}/${day}/${year}`;
+  if (dateFormat === 'YYYY-MM-DD') return `${year}-${month}-${day}`;
   return `${day}/${month}/${year}`;
 };
 

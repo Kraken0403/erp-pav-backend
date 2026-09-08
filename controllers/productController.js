@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { ensureCategorySchema, ensureVendorSchema } = require('../utils/pavilionSchema');
+const { ensureCategorySchema, ensureProductCatalogSchema, ensureVendorSchema } = require('../utils/pavilionSchema');
 
 const normalizeAddonProductIds = (ids) => {
   if (!Array.isArray(ids)) return [];
@@ -53,7 +53,7 @@ const syncProductAddons = async (connection, productId, addonProductIds = []) =>
 const normalizeBundleItems = (items) => {
   if (!Array.isArray(items)) return [];
   return items.map((it, idx) => {
-    const compId = Number(it.component_product_id || it.product_id || it.product_id === 0 ? it.product_id : null);
+    const compId = Number(it.component_product_id ?? it.product_id ?? null);
     return {
       component_product_id: Number.isInteger(compId) && compId > 0 ? compId : null,
       quantity: typeof it.quantity !== 'undefined' ? Number(it.quantity) : 1,
@@ -107,6 +107,7 @@ const syncProductBundleItems = async (connection, bundleProductId, items = []) =
 const getAllProducts = async (req, res) => {
   try {
     await ensureCategorySchema(db);
+    await ensureProductCatalogSchema(db);
     await ensureVendorSchema(db);
     const [categories] = await db.query(
       `SELECT id, name, parent_id FROM categories`
@@ -156,7 +157,9 @@ const getAllProducts = async (req, res) => {
       p.type,
       p.sku,
       p.is_active,
+      p.is_favorite,
       p.created_at,
+      p.updated_at,
   
       COUNT(v.id) AS variant_count
     FROM products p
@@ -189,6 +192,7 @@ const getProductById = async (req, res) => {
   const { id } = req.params;
 
   try {
+    await ensureProductCatalogSchema(db);
     await ensureVendorSchema(db);
     const [[product]] = await db.query(
       `
@@ -215,7 +219,9 @@ const getProductById = async (req, res) => {
       p.type,
       p.sku,
       p.is_active,
-      p.created_at
+      p.is_favorite,
+      p.created_at,
+      p.updated_at
     FROM products p
     LEFT JOIN vendors ven ON ven.id = p.vendor_id
     WHERE p.id = ?
@@ -450,10 +456,12 @@ const createProduct = async (req, res) => {
     sku = '',
     type = 'simple',
     is_active = 1,
+    is_favorite = 0,
     variants = [],
-    add_on_product_ids = []
-    , bundle_items = []
+    add_on_product_ids = [],
+    bundle_items = []
   } = req.body;
+  const hasBundleItemsPayload = Object.prototype.hasOwnProperty.call(req.body, 'bundle_items') && Array.isArray(req.body.bundle_items);
 
 
   if (!name) {
@@ -482,9 +490,12 @@ const createProduct = async (req, res) => {
   let connection;
 
   try {
+    // DDL can implicitly commit in MySQL, so prepare the schema before this
+    // request's transaction begins. This keeps product and relation updates atomic.
+    await ensureProductCatalogSchema(db);
+    await ensureVendorSchema(db);
     connection = await db.getConnection();
     await connection.beginTransaction();
-    await ensureVendorSchema(connection);
 
     const normalizedVendorId = vendor_id ? Number(vendor_id) : null;
 
@@ -496,9 +507,9 @@ const createProduct = async (req, res) => {
         cost_price, cost_price_unit, cost_price_qty,
         selling_price, selling_price_unit, selling_price_qty,
         gst_rate, hsn_sac,
-        stock, sku, type, is_active
+        stock, sku, type, is_active, is_favorite
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         name,
@@ -525,11 +536,19 @@ const createProduct = async (req, res) => {
         stock,
         sku,
         type,
-        is_active
+        is_active,
+        Number(Boolean(is_favorite))
       ]
     );
 
     const productId = productResult.insertId;
+
+    if (normalizedVendorId) {
+      await connection.query(
+        `INSERT IGNORE INTO product_vendors (product_id, vendor_id) VALUES (?, ?)`,
+        [productId, normalizedVendorId]
+      );
+    }
 
     if (type === 'variable' && Array.isArray(variants) && variants.length) {
       const variantValues = variants.map(v => [
@@ -552,8 +571,12 @@ const createProduct = async (req, res) => {
     }
 
     await syncProductAddons(connection, productId, add_on_product_ids);
-    // Sync bundle items if provided
-    await syncProductBundleItems(connection, productId, bundle_items || []);
+    // Bundle items are optional. Do not touch the relation table unless the caller
+    // explicitly sent bundle_items; this keeps ordinary catalog saves independent
+    // from the optional bundle feature/schema.
+    if (hasBundleItemsPayload) {
+      await syncProductBundleItems(connection, productId, bundle_items || []);
+    }
 
     await connection.commit();
     connection.release();
@@ -610,23 +633,28 @@ const updateProduct = async (req, res) => {
     sku = '',
     type = 'simple',
     is_active = 1,
+    is_favorite,
     variants = [],
     add_on_product_ids = [],
     bundle_items = []
   } = req.body;
+  const hasBundleItemsPayload = Object.prototype.hasOwnProperty.call(req.body, 'bundle_items') && Array.isArray(req.body.bundle_items);
 
   let connection;
 
   try {
+    // DDL can implicitly commit in MySQL, so prepare the schema before this
+    // request's transaction begins. This keeps product and relation updates atomic.
+    await ensureProductCatalogSchema(db);
+    await ensureVendorSchema(db);
     connection = await db.getConnection();
     await connection.beginTransaction();
-    await ensureVendorSchema(connection);
     const normalizedVendorId = vendor_id ? Number(vendor_id) : null;
 
     /* ---------------- FETCH EXISTING PRODUCT ---------------- */
 
     const [[existingProduct]] = await connection.query(
-      `SELECT selling_price FROM products WHERE id = ?`,
+      `SELECT selling_price, is_favorite FROM products WHERE id = ?`,
       [id]
     );
 
@@ -636,6 +664,9 @@ const updateProduct = async (req, res) => {
 
     const effectiveSellingPrice =
       selling_price ?? existingProduct.selling_price;
+    const effectiveIsFavorite = is_favorite == null
+      ? Number(existingProduct.is_favorite || 0)
+      : Number(Boolean(Number(is_favorite)));
 
     /* ---------------- VALIDATIONS ---------------- */
 
@@ -658,9 +689,6 @@ const updateProduct = async (req, res) => {
     if (cost_pricing_mode === 'percentage') {
       if (!cost_discount_percent || cost_discount_percent <= 0) {
         throw new Error('cost_discount_percent is required for percentage pricing');
-      }
-      if (cost_price > 0) {
-        throw new Error('Do not send cost_price in percentage pricing mode');
       }
     }
 
@@ -702,7 +730,8 @@ const updateProduct = async (req, res) => {
         stock=?,
         sku=?,
         type=?,
-        is_active=?
+        is_active=?,
+        is_favorite=?
       WHERE id=?
     `,
       [
@@ -731,6 +760,7 @@ const updateProduct = async (req, res) => {
         sku,
         type,
         is_active,
+        effectiveIsFavorite,
         id
       ]
     );
@@ -792,10 +822,19 @@ const updateProduct = async (req, res) => {
       );
     }
 
+    if (normalizedVendorId) {
+      await connection.query(
+        `INSERT IGNORE INTO product_vendors (product_id, vendor_id) VALUES (?, ?)`,
+        [id, normalizedVendorId]
+      );
+    }
+
     await syncProductAddons(connection, id, add_on_product_ids);
 
     // Sync bundle items (replace existing bundle components)
-    await syncProductBundleItems(connection, id, bundle_items || []);
+    if (hasBundleItemsPayload) {
+      await syncProductBundleItems(connection, id, bundle_items || []);
+    }
 
     await connection.commit();
     connection.release();
@@ -816,6 +855,229 @@ const updateProduct = async (req, res) => {
       error: 'Failed to update product',
       details: error.message
     });
+  }
+};
+
+
+const getProductUnits = async (req, res) => {
+  try {
+    await ensureProductCatalogSchema(db);
+    const [rows] = await db.query(`SELECT id, name FROM product_units ORDER BY name ASC`);
+    return res.json(rows);
+  } catch (error) {
+    console.error('getProductUnits error:', error.message);
+    return res.status(500).json({ error: 'Failed to fetch product units', details: error.message });
+  }
+};
+
+const createProductUnit = async (req, res) => {
+  const name = String(req.body?.name || '').trim().toLowerCase();
+  if (!name) return res.status(400).json({ error: 'Unit name is required' });
+  if (name.length > 50) return res.status(400).json({ error: 'Unit name must be 50 characters or less' });
+
+  try {
+    await ensureProductCatalogSchema(db);
+    await db.query(`INSERT IGNORE INTO product_units (name) VALUES (?)`, [name]);
+    const [[unit]] = await db.query(`SELECT id, name FROM product_units WHERE name = ? LIMIT 1`, [name]);
+    return res.status(201).json(unit);
+  } catch (error) {
+    console.error('createProductUnit error:', error.message);
+    return res.status(500).json({ error: 'Failed to save product unit', details: error.message });
+  }
+};
+
+const bootstrapPrimaryProductVendor = async (connection, productId) => {
+  const [[product]] = await connection.query(`SELECT id, vendor_id FROM products WHERE id = ?`, [productId]);
+  if (!product) return null;
+  if (product.vendor_id) {
+    await connection.query(
+      `INSERT IGNORE INTO product_vendors (product_id, vendor_id) VALUES (?, ?)`,
+      [productId, product.vendor_id]
+    );
+  }
+  return product;
+};
+
+const getProductVendors = async (req, res) => {
+  const { id } = req.params;
+  try {
+    await ensureProductCatalogSchema(db);
+    await ensureVendorSchema(db);
+    await bootstrapPrimaryProductVendor(db, id);
+    const [rows] = await db.query(
+      `SELECT v.id, v.name, v.contact_person, v.email, v.phone, v.gst_number, v.city, v.state,
+              CASE WHEN p.vendor_id = v.id THEN 1 ELSE 0 END AS is_primary
+       FROM product_vendors pv
+       JOIN vendors v ON v.id = pv.vendor_id
+       JOIN products p ON p.id = pv.product_id
+       WHERE pv.product_id = ? AND COALESCE(v.is_active, 1) = 1
+       ORDER BY is_primary DESC, v.name ASC`,
+      [id]
+    );
+    return res.json(rows);
+  } catch (error) {
+    console.error('getProductVendors error:', error.message);
+    return res.status(500).json({ error: 'Failed to fetch product vendors', details: error.message });
+  }
+};
+
+const addProductVendor = async (req, res) => {
+  const { id } = req.params;
+  const vendorId = Number(req.body?.vendor_id);
+  if (!Number.isInteger(vendorId) || vendorId <= 0) {
+    return res.status(400).json({ error: 'Valid vendor_id is required' });
+  }
+
+  let connection;
+  try {
+    await ensureProductCatalogSchema(db);
+    await ensureVendorSchema(db);
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    const [[product]] = await connection.query(`SELECT id, vendor_id FROM products WHERE id = ?`, [id]);
+    if (!product) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    const [[vendor]] = await connection.query(`SELECT id FROM vendors WHERE id = ? AND COALESCE(is_active, 1) = 1`, [vendorId]);
+    if (!vendor) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+
+    await connection.query(`INSERT IGNORE INTO product_vendors (product_id, vendor_id) VALUES (?, ?)`, [id, vendorId]);
+    if (!product.vendor_id) {
+      await connection.query(`UPDATE products SET vendor_id = ? WHERE id = ?`, [vendorId, id]);
+    }
+
+    await connection.commit();
+    connection.release();
+    return res.status(201).json({ message: 'Vendor added to product' });
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+      connection.release();
+    }
+    console.error('addProductVendor error:', error.message);
+    return res.status(500).json({ error: 'Failed to add vendor to product', details: error.message });
+  }
+};
+
+const removeProductVendor = async (req, res) => {
+  const { id, vendorId } = req.params;
+  const numericVendorId = Number(vendorId);
+  let connection;
+
+  try {
+    await ensureProductCatalogSchema(db);
+    await ensureVendorSchema(db);
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    const [[product]] = await connection.query(`SELECT id, vendor_id FROM products WHERE id = ?`, [id]);
+    if (!product) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    await connection.query(`DELETE FROM product_vendors WHERE product_id = ? AND vendor_id = ?`, [id, numericVendorId]);
+    if (Number(product.vendor_id) === numericVendorId) {
+      const [[nextVendor]] = await connection.query(
+        `SELECT vendor_id FROM product_vendors WHERE product_id = ? ORDER BY id ASC LIMIT 1`,
+        [id]
+      );
+      await connection.query(`UPDATE products SET vendor_id = ? WHERE id = ?`, [nextVendor?.vendor_id || null, id]);
+    }
+
+    await connection.commit();
+    connection.release();
+    return res.json({ message: 'Vendor removed from product' });
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+      connection.release();
+    }
+    console.error('removeProductVendor error:', error.message);
+    return res.status(500).json({ error: 'Failed to remove vendor from product', details: error.message });
+  }
+};
+
+const getProductAnalytics = async (req, res) => {
+  const { id } = req.params;
+  try {
+    await ensureProductCatalogSchema(db);
+    const [[product]] = await db.query(`SELECT id, is_favorite FROM products WHERE id = ?`, [id]);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    const [statusRows] = await db.query(
+      `SELECT LOWER(COALESCE(q.status, 'pending')) AS status,
+              COUNT(DISTINCT q.id) AS quotation_count,
+              COALESCE(SUM(qi.quantity), 0) AS quantity,
+              COALESCE(SUM((qi.quantity * qi.selling_price * COALESCE(NULLIF(qi.selling_price_qty, 0), 1)) - COALESCE(qi.discount, 0)), 0) AS amount
+       FROM quotation_items qi
+       JOIN quotations q ON q.id = qi.quotation_id
+       WHERE qi.product_id = ?
+       GROUP BY LOWER(COALESCE(q.status, 'pending'))
+       ORDER BY quotation_count DESC`,
+      [id]
+    );
+
+    const soldStatuses = new Set(['approved', 'converted', 'won']);
+    const rejectedStatuses = new Set(['rejected', 'declined', 'lost']);
+    const summary = statusRows.reduce((acc, row) => {
+      const status = String(row.status || 'pending').toLowerCase();
+      const quotationCount = Number(row.quotation_count || 0);
+      const quantity = Number(row.quantity || 0);
+      const amount = Number(row.amount || 0);
+      acc.total_quotations += quotationCount;
+      if (soldStatuses.has(status)) {
+        acc.approved_quotations += quotationCount;
+        acc.approved_quantity += quantity;
+        acc.approved_amount += amount;
+      } else if (rejectedStatuses.has(status)) {
+        acc.rejected_quotations += quotationCount;
+      } else {
+        acc.pending_quotations += quotationCount;
+      }
+      return acc;
+    }, {
+      total_quotations: 0,
+      approved_quotations: 0,
+      rejected_quotations: 0,
+      pending_quotations: 0,
+      approved_quantity: 0,
+      approved_amount: 0,
+      is_favorite: Boolean(product.is_favorite),
+    });
+
+    const [customers] = await db.query(
+      `SELECT l.id AS lead_id,
+              COALESCE(NULLIF(TRIM(CONCAT_WS(' ', l.first_name, l.last_name)), ''), l.contact_name, l.company_name, CONCAT('Lead #', l.id)) AS customer_name,
+              l.company_name,
+              l.email,
+              l.phone_number,
+              COUNT(DISTINCT q.id) AS approved_quotations,
+              COALESCE(SUM(qi.quantity), 0) AS quantity,
+              COALESCE(SUM((qi.quantity * qi.selling_price * COALESCE(NULLIF(qi.selling_price_qty, 0), 1)) - COALESCE(qi.discount, 0)), 0) AS amount
+       FROM quotation_items qi
+       JOIN quotations q ON q.id = qi.quotation_id
+       JOIN leads l ON l.id = q.lead_id
+       WHERE qi.product_id = ?
+         AND LOWER(COALESCE(q.status, '')) IN ('approved', 'converted', 'won')
+       GROUP BY l.id, l.first_name, l.last_name, l.contact_name, l.company_name, l.email, l.phone_number
+       ORDER BY amount DESC
+       LIMIT 50`,
+      [id]
+    );
+
+    return res.json({ summary, status_breakdown: statusRows, customers });
+  } catch (error) {
+    console.error('getProductAnalytics error:', error.message);
+    return res.status(500).json({ error: 'Failed to fetch product analytics', details: error.message });
   }
 };
 
@@ -1113,6 +1375,7 @@ const createVariantWithAttributes = async (req, res) => {
 const getProductBundleItems = async (req, res) => {
   const { id } = req.params;
   try {
+    await ensureProductCatalogSchema(db);
     const [items] = await db.query(
       `SELECT 
          pbi.id,
@@ -1146,6 +1409,7 @@ const updateProductBundleItems = async (req, res) => {
 
   let connection;
   try {
+    await ensureProductCatalogSchema(db);
     connection = await db.getConnection();
     await connection.beginTransaction();
 
@@ -2689,6 +2953,12 @@ module.exports = {
   getPublicProducts,
   getPublicProductById,
   getAllPublicProductsNoCategoryFilter,
+  getProductUnits,
+  createProductUnit,
+  getProductVendors,
+  addProductVendor,
+  removeProductVendor,
+  getProductAnalytics,
 
   // Variants
   createVariant,
@@ -2742,4 +3012,3 @@ module.exports = {
   getProductIngredients,
   updateProductIngredients
 };
-

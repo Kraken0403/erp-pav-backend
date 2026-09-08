@@ -14,6 +14,7 @@ const paymentController = require('../controllers/paymentController');
 const { listMailPreviews, getMailPreviewById } = require('../services/brevoService');
 const settingsController = require('../controllers/settingsController');
 const couponController = require('../controllers/couponController');
+const quotationController = require('../controllers/quotationController');
 
 // Public products
 apiPublicRouter.get('/products', productController.getPublicProducts);
@@ -37,6 +38,10 @@ apiPublicRouter.post('/leads', leadController.createLead);
 // Public contact endpoint (mounted at /api/public/contact)
 apiPublicRouter.post('/contact', publicContactController.createContact);
 apiPublicRouter.get('/payment-status', paymentController.getPublicPaymentStatus);
+apiPublicRouter.get('/quotations/:token', quotationController.getPublicQuotation);
+apiPublicRouter.post('/quotations/:token/verify', quotationController.verifyPublicQuotation);
+apiPublicRouter.post('/quotations/:token/accept', quotationController.acceptPublicQuotation);
+apiPublicRouter.post('/quotations/:token/clarification', quotationController.requestPublicQuotationClarification);
 apiPublicRouter.get('/order-feedback/:token', orderFeedbackController.getFeedbackForm);
 apiPublicRouter.post('/order-feedback/:token', orderFeedbackController.submitFeedback);
 
