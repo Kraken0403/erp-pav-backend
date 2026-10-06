@@ -167,6 +167,7 @@ const getAllProducts = async (req, res) => {
       ON p.id = v.product_id AND v.is_active = 1
     LEFT JOIN vendors ven
       ON ven.id = p.vendor_id
+    WHERE p.is_active = 1
     GROUP BY p.id
     ORDER BY p.created_at DESC
   `);
@@ -1104,8 +1105,23 @@ const deleteProduct = async (req, res) => {
   let connection;
 
   try {
+    // Prepare catalog relationship tables before starting the transaction;
+    // MySQL DDL can implicitly commit an open transaction.
+    await ensureProductCatalogSchema(db);
     connection = await db.getConnection();
     await connection.beginTransaction();
+
+    const [[product]] = await connection.query(
+      `SELECT id FROM products WHERE id = ? FOR UPDATE`,
+      [id]
+    );
+
+    if (!product) {
+      await connection.rollback();
+      connection.release();
+      connection = null;
+      return res.status(404).json({ error: 'Product not found' });
+    }
 
     /* =====================================================
        1️⃣ CHECK DIRECT PRODUCT USAGE IN QUOTATIONS
@@ -1168,6 +1184,26 @@ const deleteProduct = async (req, res) => {
       });
     }
 
+    // These catalog tables are supported on legacy databases without foreign
+    // keys, so hard deletion must clear their rows explicitly. Clearing both
+    // bundle directions also prevents orphaned component links.
+    await connection.query(
+      `DELETE FROM product_bundle_items
+       WHERE bundle_product_id = ? OR component_product_id = ?`,
+      [id, id]
+    );
+
+    await connection.query(
+      `DELETE FROM product_vendors WHERE product_id = ?`,
+      [id]
+    );
+
+    await connection.query(
+      `DELETE FROM product_addons
+       WHERE product_id = ? OR addon_product_id = ?`,
+      [id, id]
+    );
+
     /* =====================================================
        5️⃣ SAFE HARD DELETE (NOT USED ANYWHERE)
     ===================================================== */
@@ -1210,6 +1246,7 @@ const deleteProduct = async (req, res) => {
 
     await connection.commit();
     connection.release();
+    connection = null;
 
     return res.status(200).json({
       message: 'Product deleted successfully',

@@ -58,7 +58,8 @@ exports.generatePreviewHtml = async (payload = {}) => {
     ? normalizeBuilderConfig({ version: 2, builder: payload.template_config }, 'builder')
     : normalizeBuilderConfig(settingsRaw?.template_config_json, settingsRaw?.layout_option);
   const preferredLogo = resolvePreferredPdfLogo(
-    form.company_logo_url || settingsRaw?.logo_url,
+    settingsRaw?.logo_url,
+    form.company_logo_url,
     companyRaw?.company_logo,
   );
   const quotationTerms = [
@@ -182,7 +183,8 @@ async function loadQuotationData(quotationId) {
   );
 
   const preferredLogo = resolvePreferredPdfLogo(
-    quotation.company_logo_url || settingsRaw?.logo_url,
+    settingsRaw?.logo_url,
+    quotation.company_logo_url,
     companyRaw?.company_logo,
   );
 
@@ -201,7 +203,8 @@ async function loadQuotationData(quotationId) {
     cover_letter_html: quotationCoverLetter,
     terms_conditions_html: quotationTerms,
     default_payment_terms: quotation.payment_terms || settingsRaw?.default_payment_terms || '',
-    // Prefer quotation/internal logo; fallback to main settings logo.
+    // The quotation settings page is the canonical document-logo source.
+    // For older quotations, fall back to the saved quotation/company logo.
     // For PDFs this may be a data URI, which avoids broken images when the
     // browser/PDF service cannot reach localhost, private uploads, or a reverse-proxy URL.
     logo_url: preferredLogo,
@@ -394,7 +397,7 @@ async function getQuotation(id) {
 }
 
 async function getQuotationSettings() {
-  const [rows] = await db.query(`SELECT * FROM quotation_settings LIMIT 1`);
+  const [rows] = await db.query(`SELECT * FROM quotation_settings WHERE id = 1 LIMIT 1`);
   return rows[0] || {};
 }
 

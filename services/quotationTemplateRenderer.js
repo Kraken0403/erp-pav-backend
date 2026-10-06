@@ -91,6 +91,10 @@ const normalizeComponent = (component, index) => {
     font_size: clamp(raw.font_size, 0, 28, 0),
     border_radius: clamp(raw.border_radius, 0, 32, 0),
     max_width: clamp(raw.max_width, 0, 100, 0),
+    // Terms are a document appendix and always begin on the page immediately
+    // following the quotation body/order lines.
+    page_break_before: type === 'terms_conditions' ? true : Boolean(raw.page_break_before),
+    page_break_after: Boolean(raw.page_break_after),
   };
 };
 
@@ -390,72 +394,76 @@ const renderComponent = (data, component, config) => {
 };
 
 const renderScreenChrome = (config) => {
-  const header = stripHtml(config.custom_header_html) ? `<div class="screen-running-header rich-content">${config.custom_header_html}</div>` : '';
+  const header = stripHtml(config.custom_header_html)
+    ? `<div class="screen-running-header"><div>${config.custom_header_html}</div></div>`
+    : '';
   const footerParts = [];
-  if (stripHtml(config.custom_footer_html)) footerParts.push(`<div class="rich-content">${config.custom_footer_html}</div>`);
-  if (config.page_number_enabled) footerParts.push('<span class="screen-page-number">Page 1</span>');
-  const footer = footerParts.length ? `<div class="screen-running-footer screen-running-footer--${config.page_number_position}">${footerParts.join('')}</div>` : '';
+  if (stripHtml(config.custom_footer_html)) footerParts.push(`<div>${config.custom_footer_html}</div>`);
+  if (config.page_number_enabled) footerParts.push('<div class="screen-page-number">Page 1</div>');
+  const footer = footerParts.length
+    ? `<div class="screen-running-footer screen-running-footer--${config.page_number_position}"><div>${footerParts.join('')}</div></div>`
+    : '';
   return { header, footer };
 };
 
 const buildDocumentCss = (config) => `
 *{box-sizing:border-box}html,body{margin:0;padding:0;background:#eef2f6;color:${config.text_color};font-family:'${config.font_family}',Arial,sans-serif;font-size:${config.font_size}px;line-height:1.55;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-body{min-height:100vh}.quotation-document{margin:16px auto;background:#fff;box-shadow:0 3px 18px rgba(33,51,67,.15)}
-.document-shell{min-height:297mm;padding:${config.page_margin_top}mm ${config.page_margin_right}mm ${config.page_margin_bottom}mm ${config.page_margin_left}mm}.document-body{display:flex;flex-direction:column;gap:${config.section_spacing}px}
-.builder-component{break-inside:auto}.builder-component--break-before{break-before:page;page-break-before:always}.builder-component--break-after{break-after:page;page-break-after:always}.builder-component:empty{display:none}
-@media screen{.builder-component--break-before{margin-top:18mm;padding-top:8mm;border-top:2px dashed #b8c7d5}.builder-component--break-after{margin-bottom:18mm;padding-bottom:8mm;border-bottom:2px dashed #b8c7d5}}
+body{min-height:100vh}.quotation-preview-stage{position:relative;min-height:297mm}.quotation-document{margin:16px auto;background:#fff;box-shadow:0 3px 18px rgba(33,51,67,.15)}
+.document-shell{min-height:297mm;padding:${config.page_margin_top}mm ${config.page_margin_right}mm ${config.page_margin_bottom}mm ${config.page_margin_left}mm;display:flex;flex-direction:column}.document-body{display:block}.builder-component+.builder-component{margin-top:${config.section_spacing}px}
+.builder-component{break-inside:auto}.builder-component--break-before,.builder-component--terms_conditions{break-before:page;page-break-before:always}.builder-component--break-after{break-after:page;page-break-after:always}.builder-component:empty{display:none}
+@media screen{html,body{overflow-x:hidden}.quotation-preview-stage{width:100%}.quotation-document{position:absolute;top:16px;left:50%;width:210mm;min-height:297mm;margin:0;transform-origin:top center}.builder-component--break-before{margin-top:18mm;padding-top:8mm;border-top:2px dashed #b8c7d5}.builder-component--break-after{margin-bottom:18mm;padding-bottom:8mm;border-bottom:2px dashed #b8c7d5}}
 .company-header{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-bottom:12px;border-bottom:1px solid #e3e9ee}.company-header__identity{display:flex;align-items:center;gap:14px;min-width:0}.company-header__identity img{max-width:150px;max-height:52px;object-fit:contain}.company-header__identity strong{font-size:20px;color:${config.primary_color}}.company-header__meta{display:grid;gap:1px;text-align:right;color:${config.muted_color};font-size:.85em}
 .document-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}.document-header h1{margin:0;color:${config.primary_color};font-size:2.15em;line-height:1.05;text-transform:uppercase;letter-spacing:.04em}.document-header__accent{display:block;width:58px;height:3px;margin-top:8px;background:${config.accent_color}}.document-header table{border-collapse:collapse}.document-header td{padding:2px 0}.document-header td:first-child{padding-right:14px;color:${config.muted_color};text-align:right}.document-header td:last-child{font-weight:700}
 .client-card{display:grid;gap:2px;padding:13px 15px;border:1px solid #dfe5eb;background:#f8fafb}.client-card .eyebrow{color:${config.muted_color};font-size:.75em;font-weight:700;text-transform:uppercase;letter-spacing:.08em}.client-card strong{font-size:1.2em;color:${config.text_color}}
-.section-heading{display:inline-block;margin:0 0 8px;padding-bottom:4px;border-bottom:2px solid ${config.accent_color};color:${config.primary_color};font-size:1em;text-transform:uppercase;letter-spacing:.05em}.category-title{margin:12px 0 6px;padding:6px 10px;border-left:3px solid ${config.accent_color};background:#f7f9fb;color:${config.primary_color};font-size:1em}
+.section-heading{display:table;max-width:100%;margin:0 0 12px;padding-bottom:4px;border-bottom:2px solid ${config.accent_color};color:${config.primary_color};font-size:1em;text-transform:uppercase;letter-spacing:.05em}.category-title{margin:12px 0 8px;padding:6px 10px;border-left:3px solid ${config.accent_color};background:#f7f9fb;color:${config.primary_color};font-size:1em}
 .item-group{break-inside:auto}.items-table{width:100%;border-collapse:collapse;font-size:.9em;table-layout:auto}.items-table thead{display:table-header-group}.items-table th{padding:7px 6px;background:${config.primary_color};color:#fff;font-size:.8em;text-transform:uppercase;letter-spacing:.03em;text-align:center;vertical-align:middle}.items-table td{padding:7px 6px;border-bottom:1px solid #e5ebef;text-align:center;vertical-align:top;overflow-wrap:anywhere}.items-table tbody tr:nth-child(even){background:#fafcfd}.items-table .col-product,.items-table .col-description,.items-table .col-brand{text-align:left}.item-image{width:44px;height:38px;object-fit:contain;display:block;margin:auto}.item-title{color:${config.text_color}}.item-description{font-size:.95em;color:${config.muted_color};line-height:1.45}.item-description p{margin:0 0 3px}.item-description ul,.item-description ol{margin:3px 0;padding-left:16px}.category-total{display:flex;justify-content:flex-end;gap:18px;padding:6px 8px;color:${config.muted_color}}.category-total strong{color:${config.text_color}}
 .totals-card{width:min(280px,100%);margin-left:auto;border-top:2px solid ${config.primary_color}}.totals-card>div{display:flex;justify-content:space-between;gap:24px;padding:6px 10px;border-bottom:1px solid #e5ebef}.totals-card span{color:${config.muted_color}}.totals-card .is-grand{background:${config.primary_color};color:#fff;border:0}.totals-card .is-grand span,.totals-card .is-grand strong{color:#fff}
 .rich-content{color:${config.muted_color};line-height:1.6}.rich-content p{margin:4px 0}.rich-content ul,.rich-content ol{margin:6px 0;padding-left:20px}.rich-content h1,.rich-content h2,.rich-content h3{color:${config.primary_color};margin:8px 0 4px}.rich-content img{max-width:100%;height:auto}.builder-divider{margin:0;border:0;border-top:1px solid #dfe5eb}
 .cover-letter{min-height:245mm;display:flex;flex-direction:column;gap:24px}.cover-letter>img{display:block;max-width:180px;max-height:70px;object-fit:contain;margin:0 auto 8px}.cover-letter__to{display:grid;gap:2px}.cover-letter__to>span:first-child{color:${config.muted_color};font-size:.8em;text-transform:uppercase;letter-spacing:.08em}.cover-letter__to strong{font-size:1.15em}
-.screen-running-header{margin-bottom:${config.section_spacing}px;padding-bottom:8px;border-bottom:1px dashed #cbd6df}.screen-running-footer{display:flex;align-items:center;gap:14px;margin-top:${config.section_spacing}px;padding-top:8px;border-top:1px dashed #cbd6df;color:${config.muted_color};font-size:.8em}.screen-running-footer>div{flex:1}.screen-running-footer--center .screen-page-number{margin:auto}.screen-running-footer--right .screen-page-number{margin-left:auto}
-@page{size:A4;margin:0}@media print{html,body{background:#fff}.quotation-document{width:auto;min-height:0;margin:0;box-shadow:none}.document-shell{min-height:0;padding:0}.screen-running-header,.screen-running-footer{display:none!important}.builder-component--cover_letter{min-height:0}.cover-letter{min-height:0}tr,.client-card,.totals-card{break-inside:avoid;page-break-inside:avoid}.items-table{break-inside:auto}}
+.screen-running-header{height:${config.header_height_mm}mm;flex:0 0 ${config.header_height_mm}mm;display:flex;align-items:flex-end;overflow:hidden;color:${config.muted_color};font-size:${Math.max(8, config.font_size - 2)}px;line-height:1.35}.screen-running-header>div{width:100%;padding-bottom:3mm;border-bottom:1px solid #dfe5eb}.screen-running-header p,.screen-running-footer p{margin:0}.screen-running-header ul,.screen-running-header ol,.screen-running-footer ul,.screen-running-footer ol{margin:0;padding-left:16px}.screen-running-header img{max-height:${Math.max(12, config.header_height_mm - 4)}mm;max-width:100%;object-fit:contain}.screen-running-footer{height:${config.footer_height_mm}mm;flex:0 0 ${config.footer_height_mm}mm;display:flex;align-items:flex-start;margin-top:auto;overflow:hidden;color:${config.muted_color};font-size:${Math.max(8, config.font_size - 3)}px;line-height:1.3}.screen-running-footer>div{width:100%;padding-top:2.5mm;border-top:1px solid #dfe5eb}.screen-running-footer img{max-height:${Math.max(10, config.footer_height_mm - 4)}mm;max-width:100%;object-fit:contain}.screen-running-footer--left .screen-page-number{text-align:left}.screen-running-footer--center .screen-page-number{text-align:center}.screen-running-footer--right .screen-page-number{text-align:right}.screen-page-number{margin-top:1mm;white-space:nowrap}
+@page{size:A4;margin:${config.page_margin_top}mm ${config.page_margin_right}mm ${config.page_margin_bottom}mm ${config.page_margin_left}mm}@media print{html,body{background:#fff}.quotation-preview-stage{position:static;min-height:0;height:auto!important}.quotation-document{position:static;width:auto;min-height:0;margin:0;transform:none!important;box-shadow:none}.document-shell{min-height:calc(297mm - ${config.page_margin_top}mm - ${config.page_margin_bottom}mm);padding:0}.builder-component--cover_letter{min-height:0}.cover-letter{min-height:0}tr,.client-card,.totals-card{break-inside:avoid;page-break-inside:avoid}.items-table{break-inside:auto}}
 `;
+
+// Keep browser previews at the same physical A4 width as exported PDFs, then
+// scale the complete page to its iframe. A responsive document viewport would
+// otherwise change wrapping, gaps and table widths before export.
+const buildPreviewScaleScript = () => `<script>(function(){
+  function fitQuotationPreview(){
+    if(window.matchMedia&&window.matchMedia('print').matches)return;
+    var stage=document.querySelector('.quotation-preview-stage');
+    var page=document.querySelector('.quotation-document');
+    if(!stage||!page)return;
+    var available=Math.max(1,window.innerWidth-32);
+    var scale=Math.min(1,available/page.offsetWidth);
+    page.style.transform='translateX(-50%) scale('+scale+')';
+    stage.style.height=Math.ceil((page.scrollHeight*scale)+32)+'px';
+  }
+  window.addEventListener('resize',fitQuotationPreview);
+  window.addEventListener('load',fitQuotationPreview);
+  document.addEventListener('DOMContentLoaded',fitQuotationPreview);
+  setTimeout(fitQuotationPreview,0);
+  setTimeout(fitQuotationPreview,250);
+}());</script>`;
 
 const renderQuotationDocument = (data = {}) => {
   const config = normalizeBuilderConfig(data.settings?.template_config || data.settings?.template_config_json, data.settings?.layout_option);
   const screenChrome = renderScreenChrome(config);
   const body = config.components.map((component) => renderComponent(data, component, config)).join('');
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>${buildDocumentCss(config)}</style></head><body><main class="quotation-document"><div class="document-shell">${screenChrome.header}<div class="document-body">${body}</div>${screenChrome.footer}</div></main></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>${buildDocumentCss(config)}</style></head><body><div class="quotation-preview-stage"><main class="quotation-document"><div class="document-shell">${screenChrome.header}<div class="document-body">${body}</div>${screenChrome.footer}</div></main></div>${buildPreviewScaleScript()}</body></html>`;
 };
 
-const buildHeaderTemplate = (config) => {
-  if (!stripHtml(config.custom_header_html)) return '<div></div>';
-  return `<style>html,body{margin:0;padding:0}p{margin:0}ul,ol{margin:0;padding-left:16px}img{max-height:${Math.max(12, config.header_height_mm - 4)}mm;max-width:100%;object-fit:contain}</style><div style="box-sizing:border-box;width:100%;height:${config.header_height_mm}mm;padding:0 ${config.page_margin_right}mm 0 ${config.page_margin_left}mm;font-family:'${config.font_family}',Arial,sans-serif;font-size:${Math.max(8, config.font_size - 2)}px;color:${config.muted_color};display:flex;align-items:flex-end;overflow:hidden;"><div style="width:100%;padding-bottom:3mm;border-bottom:1px solid #dfe5eb;line-height:1.35;">${config.custom_header_html}</div></div>`;
-};
-
-const buildFooterTemplate = (config) => {
-  const hasFooter = stripHtml(config.custom_footer_html);
-  if (!hasFooter && !config.page_number_enabled) return '<div></div>';
-  const textAlign = config.page_number_position === 'left' ? 'left' : config.page_number_position === 'center' ? 'center' : 'right';
-  const pageNumber = config.page_number_enabled
-    ? `<div style="margin-top:1mm;text-align:${textAlign};white-space:nowrap;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`
-    : '';
-  return `<style>html,body{margin:0;padding:0}p{margin:0}ul,ol{margin:0;padding-left:16px}img{max-height:${Math.max(10, config.footer_height_mm - 4)}mm;max-width:100%;object-fit:contain}</style><div style="box-sizing:border-box;width:100%;height:${config.footer_height_mm}mm;padding:0 ${config.page_margin_right}mm 0 ${config.page_margin_left}mm;font-family:'${config.font_family}',Arial,sans-serif;font-size:${Math.max(8, config.font_size - 3)}px;color:${config.muted_color};display:flex;align-items:flex-start;overflow:hidden;"><div style="width:100%;padding-top:2.5mm;border-top:1px solid #dfe5eb;line-height:1.3;">${config.custom_footer_html || ''}${pageNumber}</div></div>`;
-};
-
-const getPdfPayloadOverrides = (configValue) => {
-  const config = normalizeBuilderConfig(configValue);
-  const hasHeader = Boolean(stripHtml(config.custom_header_html));
-  const hasFooter = Boolean(stripHtml(config.custom_footer_html)) || config.page_number_enabled;
-  return {
+const getPdfPayloadOverrides = () => ({
     format: 'A4',
+    preferCSSPageSize: true,
     printBackground: true,
-    displayHeaderFooter: hasHeader || hasFooter,
-    headerTemplate: hasHeader ? buildHeaderTemplate(config) : '<div></div>',
-    footerTemplate: hasFooter ? buildFooterTemplate(config) : '<div></div>',
+    displayHeaderFooter: false,
     margin: {
-      top: `${config.page_margin_top + (hasHeader ? config.header_height_mm : 0)}mm`,
-      right: `${config.page_margin_right}mm`,
-      bottom: `${config.page_margin_bottom + (hasFooter ? config.footer_height_mm : 0)}mm`,
-      left: `${config.page_margin_left}mm`,
+      top: '0mm',
+      right: '0mm',
+      bottom: '0mm',
+      left: '0mm',
     },
-  };
-};
+  });
 
 module.exports = {
   DEFAULT_BUILDER_CONFIG,

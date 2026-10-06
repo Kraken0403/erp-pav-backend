@@ -49,7 +49,7 @@ const getQuotationSettings = async (req, res) => {
     await ensureQuotationTemplateColumns();
 
     const [results] = await db.query(
-      `SELECT * FROM quotation_settings LIMIT 1`
+      `SELECT * FROM quotation_settings WHERE id = 1 LIMIT 1`
     );
 
     if (!results.length) {
